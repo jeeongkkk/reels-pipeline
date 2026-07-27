@@ -307,12 +307,14 @@ CONTENT(2~6장)마다 content_variant를 "A" 또는 "B"로 선택.
 - (A) explanations만 / (B) main_statement + detailed_lines만
 - sub_point_title / sub_point_text / detailed_paragraph 사용 금지
 
-### SUMMARY / OUTRO (마지막 장)
-- main_title: 아웃로 임팩트 카피 (예: "당신의 사수가 되어드립니다")
-- title_lines: 가능하면 2~3개로 호흡 분해 (예: ["당신의", "사수가", "되어드립니다"])
-- summary_list: 선택 (짧으면 서브카피로 쓰일 수 있음)
-- 다크 미니멀 매거진 톤: 거대 타이포, 여백, 감성 카피
-- 앞 슬라이드 문장 복붙 금지
+### SUMMARY (7장) – 다크 미니멀 요약 리스트
+- main_title: 요약 헤더 (예: "핵심 체크 포인트")
+- summary_list: **정확히 3개 또는 4개** (화면 중앙 리스트로 렌더)
+- **앞 슬라이드 문장 복붙·단순 잘라내기 엄격 금지**
+- 독자가 당장 머릿속에 새겨야 할 **실행 가능한 액션 플랜** 또는 **최종 인사이트**
+- 각 항목 **20자 이내**, 명사형 종결, 마침표 금지, 번호 없이
+- 강조어는 *별표*로 감싸기 가능
+- 좋은 예: "마감 D-7 캘린더 고정", "서류 3종 오늘 준비", "*지원율 80%* 재확인"
 
 {EDITOR_STYLE_RULE}
 {KOREAN_ONLY_RULE}

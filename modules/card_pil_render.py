@@ -27,12 +27,18 @@ MARGIN_X = 80
 BRAND_FALLBACK = "WITH CHOYOOL"
 DEFAULT_BRAND_COLOR = "#DD5138"
 
-COVER_DIM_ALPHA = 0.62
+COVER_DIM_ALPHA = 0.62  # legacy; cover now uses top linear gradient
+COVER_GRAD_TOP_ALPHA = 220
+COVER_GRAD_FADE_RATIO = 0.55  # top 55% fades to transparent
+COVER_TEXT_Y_RATIO = 0.34  # place title in dense gradient band (30~40%)
 COVER_TITLE_BASE = 92
 COVER_TITLE_MIN = 56
 CONTENT_HEADER_BASE = 42
-CONTENT_BODY_BASE = 52
-CONTENT_LINE_FACTOR = 1.8
+CONTENT_BODY_BASE = 62  # ~20% larger than prior 52
+CONTENT_LINE_FACTOR = 1.85
+SUMMARY_TITLE_BASE = 52
+SUMMARY_ITEM_BASE = 48
+SUMMARY_LINE_STEP = 1.9
 OUTRO_TITLE_BASE = 110
 HEADER_PAD_X = 22
 HEADER_PAD_TOP = 12
@@ -136,34 +142,20 @@ def _as_lines(raw: Any, *, keep_emphasis: bool = False) -> list[str]:
 
 
 def _parse_emphasis(text: str) -> list[tuple[str, bool]]:
-    """Split '*강조*' markers into (segment, emphasized) parts."""
-    raw = text or ""
-    parts: list[tuple[str, bool]] = []
-    i = 0
-    while i < len(raw):
-        if raw[i] == "*":
-            j = raw.find("*", i + 1)
-            if j > i + 1:
-                parts.append((raw[i + 1 : j], True))
-                i = j + 1
-                continue
-        nxt = raw.find("*", i)
-        if nxt < 0:
-            chunk = raw[i:]
-            if chunk:
-                parts.append((chunk, False))
-            break
-        chunk = raw[i:nxt]
-        if chunk:
-            parts.append((chunk, False))
-        i = nxt
-    if not parts:
-        return [(raw.replace("*", ""), False)]
-    return parts
+    """Split on '*' – even index = normal, odd index = accent."""
+    parts = (text or "").split("*")
+    out: list[tuple[str, bool]] = []
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        out.append((part, i % 2 == 1))
+    if not out:
+        return [((text or "").replace("*", ""), False)]
+    return out
 
 
 def _plain_from_emphasis(text: str) -> str:
-    return "".join(seg for seg, _ in _parse_emphasis(text))
+    return (text or "").replace("*", "")
 
 
 def _fit_single_line(
@@ -211,6 +203,28 @@ def _fit_cover(img: Image.Image, w: int, h: int) -> Image.Image:
 def _draw_full_dim(base: Image.Image, *, alpha: float) -> None:
     a = max(0.0, min(1.0, float(alpha)))
     overlay = Image.new("RGBA", base.size, (0, 0, 0, int(255 * a)))
+    composited = Image.alpha_composite(base.convert("RGBA"), overlay)
+    base.paste(composited.convert("RGB"))
+
+
+def _apply_top_linear_gradient(
+    base: Image.Image,
+    *,
+    top_alpha: int = COVER_GRAD_TOP_ALPHA,
+    fade_ratio: float = COVER_GRAD_FADE_RATIO,
+) -> None:
+    """Black linear gradient: opaque at top → transparent mid/lower (keeps subject)."""
+    w, h = base.size
+    fade_h = max(1, int(h * max(0.35, min(0.7, fade_ratio))))
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    top_a = max(0, min(255, int(top_alpha)))
+    for y in range(fade_h):
+        t = y / max(fade_h - 1, 1)
+        a = int(top_a * (1.0 - t))
+        if a <= 0:
+            continue
+        draw.line([(0, y), (w, y)], fill=(0, 0, 0, a))
     composited = Image.alpha_composite(base.convert("RGBA"), overlay)
     base.paste(composited.convert("RGB"))
 
@@ -320,22 +334,20 @@ def _draw_centered_emphasis_line(
     accent: tuple[int, int, int],
     default_fill: tuple[int, int, int] = PURE_WHITE,
 ) -> int:
-    """Center-draw a line with optional *emphasis* segments in accent color."""
-    segments = _parse_emphasis(text)
-    plain = "".join(seg for seg, _ in segments)
-    if not plain:
+    """'*' split highlight: odd parts accent; advance X by font.getlength()."""
+    plain = _plain_from_emphasis(text)
+    if not plain.strip():
         return y
-    total_w = _text_width(plain, font)
-    left0, top0, _, bottom0 = _text_bbox(plain, font)
-    x = (canvas_w - int(total_w)) // 2
-    cursor = x
-    for seg, emph in segments:
-        if not seg:
+    parts = (text or "").split("*")
+    total_w = int(_text_width(plain, font))
+    _, top0, _, bottom0 = _text_bbox(plain, font)
+    current_x = (canvas_w - total_w) // 2
+    for i, part in enumerate(parts):
+        if not part:
             continue
-        fill = accent if emph else default_fill
-        sl, st, _, _ = _text_bbox(seg, font)
-        draw.text((cursor - sl, y - top0), seg, fill=fill, font=font)
-        cursor += int(_text_width(seg, font))
+        fill = accent if (i % 2 == 1) else default_fill
+        draw.text((current_x, y - top0), part, fill=fill, font=font)
+        current_x += int(_text_width(part, font))
     return y + (bottom0 - top0)
 
 
@@ -431,9 +443,9 @@ def _render_cover(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """COVER – deep dim, no boxes, pure white centered Black type + top logo."""
+    """COVER – top linear gradient (not full dim), white title in upper band."""
     del brand_color
-    _draw_full_dim(base, alpha=COVER_DIM_ALPHA)
+    _apply_top_linear_gradient(base)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
     draw_logo(base, scale=scale, position="top", brand_name=logo)
@@ -460,8 +472,8 @@ def _render_cover(
         prepared.append((clean, font))
 
     gap = int(28 * scale)
-    stack_h = sum(_text_height(t, f) for t, f in prepared) + gap * max(0, len(prepared) - 1)
-    y = max(int(h * 0.32), (h - stack_h) // 2 - 20 * scale)
+    # Anchor in gradient-dense zone (30~40% from top)
+    y = int(h * COVER_TEXT_Y_RATIO)
 
     for clean, font in prepared:
         y = _draw_centered_line(draw, clean, y=y, canvas_w=w, font=font, fill=PURE_WHITE)
@@ -517,8 +529,8 @@ def _render_content(
             max_width=max_w,
             base_size=CONTENT_BODY_BASE,
             scale=scale,
-            weight="bold",
-            min_size=34,
+            weight="extrabold",
+            min_size=40,
         )
         y = _draw_centered_emphasis_line(
             draw,
@@ -535,6 +547,80 @@ def _render_content(
     return base
 
 
+def _render_summary(
+    base: Image.Image,
+    slide: dict[str, Any],
+    *,
+    brand_color: str,
+    logo: str,
+    scale: int,
+) -> Image.Image:
+    """SUMMARY (slide 7) – centered title + 1~4 takeaway list."""
+    accent = _hex_rgb(brand_color)
+    draw = ImageDraw.Draw(base)
+    w, h = CARD_W * scale, CARD_H * scale
+    draw_logo(base, scale=scale, position="top", brand_name=logo)
+
+    title = _clean_display(str(slide.get("main_title") or slide.get("hook") or "핵심 체크 포인트"))
+    max_w = int(w * 0.86)
+
+    raw_items = _as_lines(slide.get("summary_list") or slide.get("body_points") or [])[:4]
+    items: list[str] = []
+    for item in raw_items:
+        clean = re.sub(r"^\d+[\.\)]\s*", "", item).strip()
+        clean = _clean_display(clean, keep_emphasis=True)
+        if clean:
+            items.append(clean)
+
+    # Vertical stack height estimate for true optical center
+    title_font = _font(SUMMARY_TITLE_BASE * scale, weight="extrabold")
+    item_fonts: list[ImageFont.ImageFont] = []
+    for clean in items:
+        _, f = _fit_single_line(
+            clean,
+            max_width=max_w - 40 * scale,
+            base_size=SUMMARY_ITEM_BASE,
+            scale=scale,
+            weight="extrabold",
+            min_size=34,
+        )
+        item_fonts.append(f)
+
+    gap_after_title = int(70 * scale)
+    line_gap = int(SUMMARY_ITEM_BASE * scale * (SUMMARY_LINE_STEP - 1.0))
+    stack_h = _text_height(title, title_font) + HEADER_PAD_TOP * scale + HEADER_PAD_BOTTOM * scale
+    stack_h += gap_after_title
+    for clean, font in zip(items, item_fonts):
+        stack_h += _text_height(_plain_from_emphasis(clean), font) + line_gap
+    y = max(int(h * 0.28), (h - stack_h) // 2)
+
+    y = _draw_header_box(
+        draw,
+        title,
+        y=y,
+        canvas_w=w,
+        font=title_font,
+        accent=accent,
+        scale=scale,
+    )
+    y += gap_after_title
+
+    for i, (clean, font) in enumerate(zip(items, item_fonts)):
+        label = f"{i + 1}. {clean}"
+        y = _draw_centered_emphasis_line(
+            draw,
+            label,
+            y=y,
+            canvas_w=w,
+            font=font,
+            accent=accent,
+            default_fill=PURE_WHITE,
+        )
+        y += line_gap
+
+    return base
+
+
 def _render_outro(
     base: Image.Image,
     slide: dict[str, Any],
@@ -543,7 +629,12 @@ def _render_outro(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """OUTRO – huge slightly-left title + bottom-right logo."""
+    """OUTRO – huge slightly-left title + bottom-right logo (no summary_list)."""
+    # If summary payload exists, prefer summary layout
+    if _as_lines(slide.get("summary_list") or slide.get("body_points") or []):
+        return _render_summary(
+            base, slide, brand_color=brand_color, logo=logo, scale=scale
+        )
     del brand_color
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
@@ -552,19 +643,13 @@ def _render_outro(
     if not lines:
         title = _clean_display(str(slide.get("main_title") or slide.get("hook") or ""))
         if title:
-            # Break into short breath units for magazine impact
             if len(title) > 12 and " " not in title:
-                # Hangul: split roughly into 2–3 chunks
                 chunk = max(4, len(title) // 3)
                 lines = [title[i : i + chunk] for i in range(0, len(title), chunk)][:3]
             else:
                 lines = [p for p in re.split(r"\s+|/", title) if p][:4] or [title]
     if not lines:
-        items = _as_lines(slide.get("summary_list") or [])
-        if items:
-            lines = ["당신의", "사수가", "되어드립니다"]
-        else:
-            lines = ["당신의", "사수가", "되어드립니다"]
+        lines = ["당신의", "사수가", "되어드립니다"]
 
     max_w = int(w * 0.78)
     prepared: list[tuple[str, ImageFont.ImageFont]] = []
@@ -582,7 +667,6 @@ def _render_outro(
     gap = int(18 * scale)
     stack_h = sum(_text_height(t, f) for t, f in prepared) + gap * max(0, len(prepared) - 1)
     y = max(int(h * 0.30), (h - stack_h) // 2 - 80 * scale)
-    # Slightly left of center
     left_nudge = int(w * 0.08)
 
     for clean, font in prepared:
@@ -594,11 +678,6 @@ def _render_outro(
         y += (bottom - top) + gap
 
     sub = _clean_display(str(slide.get("category_tag") or slide.get("badge_text") or ""))
-    if not sub:
-        # Optional soft subtitle from first summary item
-        items = _as_lines(slide.get("summary_list") or [])
-        if items:
-            sub = items[0]
     if sub:
         sfont = _font(28 * scale, weight="medium")
         left, top, right, bottom = _text_bbox(sub, sfont)
@@ -612,16 +691,22 @@ def _render_outro(
 
 def _normalize_slide_type(slide: dict[str, Any], index: int, total: int) -> str:
     raw = str(slide.get("slide_type") or "").upper().strip()
+    has_summary = bool(
+        _as_lines(slide.get("summary_list") or [])
+        or (raw == "SUMMARY" and _as_lines(slide.get("body_points") or []))
+    )
     if raw in {"TITLE", "COVER"}:
         return "COVER"
     if raw in {"DETAIL", "CONTENT", "QUOTE", "BODY"}:
         return "CONTENT"
-    if raw in {"SUMMARY", "OUTRO", "CTA", "ENDING"}:
+    if raw == "SUMMARY" or (index >= total - 1 and has_summary):
+        return "SUMMARY"
+    if raw in {"OUTRO", "CTA", "ENDING"}:
         return "OUTRO"
     if index <= 0:
         return "COVER"
     if index >= total - 1:
-        return "OUTRO"
+        return "SUMMARY" if has_summary else "OUTRO"
     return "CONTENT"
 
 
@@ -649,6 +734,9 @@ def render_slide_pil(
         else:
             base = Image.new("RGB", (w, h), BG_DARK)
         img = _render_cover(base, slide, brand_color=color, logo=logo, scale=scale)
+    elif slide_type == "SUMMARY":
+        base = Image.new("RGB", (w, h), BG_DARK)
+        img = _render_summary(base, slide, brand_color=color, logo=logo, scale=scale)
     elif slide_type == "OUTRO":
         base = Image.new("RGB", (w, h), BG_DARK)
         img = _render_outro(base, slide, brand_color=color, logo=logo, scale=scale)
