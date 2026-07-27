@@ -177,17 +177,28 @@ def _clean_headline(title: str) -> str:
     return t.strip(" .…")
 
 
+def _is_date_only_headline(title: str) -> bool:
+    """Reject calendar/date dump titles like '2026년 06월 26일 금요일'."""
+    t = _clean_headline(title)
+    if re.fullmatch(
+        r"\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일(?:\s*[월화수목금토일]요일)?",
+        t,
+    ):
+        return True
+    if re.fullmatch(r"\d{4}[./-]\d{1,2}[./-]\d{1,2}", t):
+        return True
+    return False
+
+
 def _shape_topic(category: TopicCategory, headline: str) -> str:
     """Turn a news headline into a Human-Directed production topic."""
     clean = _clean_headline(headline)
     if not clean:
         return category.topic_prefix
 
-    # Prefer short actionable topic; keep year if present
     if len(clean) <= 42:
         return clean
 
-    # Truncate at clause boundary
     for sep in ("…", "·", ",", ":"):
         if sep in clean:
             left = clean.split(sep, 1)[0].strip()
@@ -197,12 +208,39 @@ def _shape_topic(category: TopicCategory, headline: str) -> str:
     return clean[:40].rstrip() + "…"
 
 
+def _parse_published_age_days(article: dict[str, Any]) -> float | None:
+    """Return age in days from published field, or None if unknown."""
+    from email.utils import parsedate_to_datetime
+
+    raw = str(article.get("published") or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = parsedate_to_datetime(raw)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+    except Exception:  # noqa: BLE001
+        pass
+    # Korean / ISO fallbacks
+    m = re.search(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", raw)
+    if m:
+        try:
+            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+        except ValueError:
+            return None
+    return None
+
+
 def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
     title = str(article.get("title") or "")
     summary = str(article.get("summary") or "")
     blob = f"{title} {summary}"
     low = blob.lower()
 
+    if _is_date_only_headline(title):
+        return -1.0
     if _is_low_quality_article(article):
         return -1.0
     if re.search(r"허위|과장광고|송치|사기|피의자|야동|주소콘", blob):
@@ -214,7 +252,7 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
 
     score = 1.0 + hits * 1.2
 
-    # Freshness
+    # Freshness by year mention
     years = {int(y) for y in re.findall(r"(20\d{2})", blob)}
     if CURRENT_YEAR in years:
         score += 2.0
@@ -222,6 +260,23 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
         score += 0.4
     if years and max(years) < CURRENT_YEAR - 1:
         score -= 2.0
+
+    # Hard recency: prefer last 7 days, soft-penalize older
+    age = _parse_published_age_days(article)
+    settings = get_settings()
+    window = max(1, int(settings.tavily_days or 7))
+    if age is not None:
+        if age > window:
+            return -1.0  # outside recent window
+        if age <= 2:
+            score += 2.0
+        elif age <= 7:
+            score += 1.2
+        else:
+            score += 0.3
+    else:
+        # Unknown publish date – mild penalty vs dated fresh articles
+        score -= 0.3
 
     # Concrete signals that make good card-news topics
     if re.search(r"\d+(?:\.\d+)?(?:억|조|만|%|원)", blob):

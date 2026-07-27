@@ -138,8 +138,8 @@ async def rewrite_hooks_with_llm(
     seeds = "\n".join(f"- {h}" for h in seed_hooks[:8] if h.strip())
     ref = reference.summary_for_prompt() if reference else "없음"
 
-    prompt = f"""당신은 인스타 릴스 훅 카피라이터입니다.
-뉴스 제목을 숏폼 훅으로 다시 쓰세요. JSON만 출력.
+    prompt = f"""당신은 인스타 카드뉴스/릴스 전문 훅 카피라이터다.
+뉴스 제목을 **스크롤을 멈추는 훅**으로 다시 써라. JSON만 출력.
 
 주제: {topic}
 시드 헤드라인:
@@ -150,9 +150,14 @@ async def rewrite_hooks_with_llm(
 규칙:
 - {count}개 훅 생성
 - 각 훅 {max_chars}자 이내
-- 구어체, 첫 1초에 멈추게 하는 문장
-- 기계적 인사/오늘 알아볼 금지
+- 공식: [대상/맥락] + [긴장] + [손해·반전·숫자]
+- 금지: "~전망", "~동향", "~여건", "~분석", 뉴스 제목 복붙, 기계적 인사
+- 필수: 숫자 또는 "모르면/놓치면/틀린/날림/증발/폭등" 중 1개 이상
+- 구어체, 첫 1초에 멈추게
 - {KOREAN_ONLY_RULE}
+
+좋은 예: "바우처 모르면 지원금 날림", "코스피 5500? 대부분 착각"
+나쁜 예: "2026년 한국 주식시장 여건 및 전망"
 
 JSON:
 {{"hooks": ["훅1", "훅2", "..."]}}

@@ -39,6 +39,78 @@ logger = get_logger(__name__)
 CURRENT_YEAR = datetime.now().year  # 2026
 CURRENT_YEAR_LABEL = f"{CURRENT_YEAR}년"
 
+_WEAK_COVER_RE = re.compile(
+    r"(전망|동향|여건|분석|종합|브리핑|정리|업데이트|리포트)$"
+)
+_COVER_TENSION = ("모르면", "놓치면", "틀린", "착각", "대부분", "지금", "아직", "절대")
+_COVER_PUNCH = ("날림", "증발", "폭등", "붕괴", "필수", "금지", "위험", "기회", "착각", "%", "억", "조")
+
+
+def _is_weak_cover_lines(lines: list[str]) -> bool:
+    if not lines:
+        return True
+    joined = " ".join(lines)
+    if _WEAK_COVER_RE.search(lines[-1].strip()) or _WEAK_COVER_RE.search(joined):
+        return True
+    if not any(t in joined for t in _COVER_TENSION) and not any(
+        p in joined for p in _COVER_PUNCH
+    ):
+        return True
+    # All lines similar length → monotonous
+    lengths = [len(x) for x in lines if x]
+    if len(lengths) >= 2 and max(lengths) - min(lengths) <= 2:
+        if not any(t in joined for t in _COVER_TENSION):
+            return True
+    return False
+
+
+def _punch_up_cover_lines(topic: str, hook: str, lines: list[str]) -> list[str]:
+    """Rewrite flat cover into setup / tension / punch when LLM output is bland."""
+    clean = [re.sub(r"\s+", " ", (x or "").strip()).rstrip(".。…!") for x in lines if str(x).strip()]
+    if clean and not _is_weak_cover_lines(clean):
+        return clean[:3]
+
+    seed = (hook or topic or "").strip()
+    seed = re.sub(r"\s+", " ", seed)
+    # Prefer concrete noun chunk from topic
+    core = re.split(r"[·|,/\-–—]", topic or seed)[0].strip()
+    core = re.sub(r"^(최근|최신)\s*", "", core)
+    if len(core) > 16:
+        core = core[:16].rstrip()
+    setup = core or "이번 이슈"
+    tension = "이거 모르면"
+    punch = "기회 다 날림"
+    if re.search(r"바우처|지원|공고", topic or ""):
+        punch = "지원금 다 날림"
+    elif re.search(r"증시|코스피|주식|투자", topic or ""):
+        punch = "장밋빛 착각"
+        tension = "대부분 놓치는"
+    elif re.search(r"\d+\s*%|\d+\s*억", seed):
+        m = re.search(r"(\d+(?:\.\d+)?\s*(?:%|억|조|만))", seed)
+        punch = f"{m.group(1)} 놓침" if m else punch
+    return [setup[:14], tension, punch][:3]
+
+
+def _ensure_star_emphasis(lines: list[str]) -> list[str]:
+    """Guarantee at least one *emphasis* span for terracotta highlight rendering."""
+    out = [str(x) for x in lines if str(x).strip()]
+    if not out:
+        return out
+    if any("*" in x for x in out):
+        return out
+    # Wrap a numeric / keyword token in the last line
+    last = out[-1]
+    m = re.search(r"(\d+(?:\.\d+)?(?:%|억|조|만|원)?|D-\d+|마감|필수|금지)", last)
+    if m:
+        token = m.group(1)
+        out[-1] = last.replace(token, f"*{token}*", 1)
+        return out
+    # Fallback: wrap middle 2~6 chars
+    if len(last) >= 4:
+        mid = last[len(last) // 4 : len(last) // 4 + max(2, len(last) // 3)]
+        out[-1] = last.replace(mid, f"*{mid}*", 1)
+    return out
+
 _DEFAULT_COVER_IMAGE_PROMPT = (
     "messy real desk with crumpled receipts, iced coffee cup, open laptop half out of frame, "
     "tangled phone charger, natural window light, slightly imperfect framing, "
@@ -1075,7 +1147,7 @@ async def generate_card_script(
     # ── Chain step 1: live web search BEFORE LLM ─────────────
     from modules.web_facts import fetch_live_web_facts
 
-    web_bundle = await fetch_live_web_facts(topic, limit=8, days=30)
+    web_bundle = await fetch_live_web_facts(topic, limit=8, days=None)
     # RSS first (news), then live web – sorted by freshness (2026 > 2025)
     rss_facts = _rank_facts(
         [f for f in research_facts if f and _is_on_topic_fact(topic, f)],
@@ -1178,6 +1250,11 @@ async def generate_card_script(
             if st == "COVER":
                 if not s.title_lines:
                     s.title_lines = [s.main_title]
+                s.title_lines = _punch_up_cover_lines(
+                    topic, selected_hook or s.hook or s.main_title, list(s.title_lines)
+                )
+                s.main_title = " ".join(s.title_lines)
+                s.hook = s.main_title
                 if not s.category_tag:
                     s.category_tag = "#인사이트"
                 if not s.image_prompt:
@@ -1224,6 +1301,7 @@ async def generate_card_script(
                             ]
                         )
                     s.detailed_lines = [x for x in s.detailed_lines if x][:DETAIL_MAX_LINES]
+                    s.detailed_lines = _ensure_star_emphasis(s.detailed_lines)
                     s.explanations = []
                     s.main_text = "\n".join([s.main_statement, *s.detailed_lines]).strip()
                     s.body = s.main_text
@@ -1249,6 +1327,7 @@ async def generate_card_script(
                         clip_explanation_line(x.rstrip(".。…!")) for x in s.explanations[:3]
                     ]
                     s.explanations = [x for x in s.explanations if x]
+                    s.explanations = _ensure_star_emphasis(s.explanations)
                     s.main_text = "\n".join(s.explanations)
                     s.body = s.main_text
                     s.body_points = list(s.explanations)
@@ -1265,6 +1344,7 @@ async def generate_card_script(
                     for x in s.summary_list[:SUMMARY_MAX_ITEMS]
                 ]
                 s.summary_list = [x for x in s.summary_list if x]
+                s.summary_list = _ensure_star_emphasis(s.summary_list)
                 s.body_points = s.summary_list
                 s.main_title = (s.main_title or "핵심 체크 포인트").rstrip(".。…!")
                 s.image_prompt = ""

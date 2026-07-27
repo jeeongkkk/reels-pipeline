@@ -59,7 +59,7 @@ class WebFactBundle:
     facts: list[WebFact] = field(default_factory=list)
     provider: str = ""
     query_used: str = ""
-    days: int = 30
+    days: int = 7
 
     def prompt_facts(self, limit: int = 3) -> list[str]:
         return [f.as_prompt_line() for f in self.facts[:limit] if f.as_prompt_line()]
@@ -200,7 +200,7 @@ async def _search_tavily(
     topic: str,
     limit: int = 5,
     *,
-    days: int = 30,
+    days: int = 7,
 ) -> tuple[list[WebFact], list[str]]:
     """Multi-query Tavily news search restricted to the last ``days`` days."""
     settings = get_settings()
@@ -353,7 +353,7 @@ async def fetch_live_web_facts(
 ) -> WebFactBundle:
     """Chain: Tavily → SerpAPI → DuckDuckGo (optional).
 
-    ``days`` restricts Tavily to recent news (default from ``TAVILY_DAYS``, usually 30).
+    ``days`` restricts Tavily to recent news (default from ``TAVILY_DAYS``, usually 7).
     When Tavily key is configured and ``TAVILY_SKIP_DDG_FALLBACK=true``, DuckDuckGo is
     never called.
     """
@@ -362,7 +362,7 @@ async def fetch_live_web_facts(
         raise ValueError("topic is required for web fact search")
 
     settings = get_settings()
-    tavily_days = max(1, int(days if days is not None else settings.tavily_days or 30))
+    tavily_days = max(1, int(days if days is not None else settings.tavily_days or 7))
     skip_ddg = bool(settings.tavily_skip_ddg_fallback) and _tavily_configured()
 
     providers: list[tuple[str, Any]] = []

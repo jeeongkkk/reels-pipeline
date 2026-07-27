@@ -31,8 +31,10 @@ COVER_DIM_ALPHA = 0.62  # legacy; cover now uses top linear gradient
 COVER_GRAD_TOP_ALPHA = 220
 COVER_GRAD_FADE_RATIO = 0.55  # top 55% fades to transparent
 COVER_TEXT_Y_RATIO = 0.34  # place title in dense gradient band (30~40%)
-COVER_TITLE_BASE = 92
-COVER_TITLE_MIN = 56
+COVER_TITLE_BASE = 84
+COVER_PUNCH_BASE = 108  # last line bigger – scroll stop
+COVER_TITLE_MIN = 52
+COVER_PUNCH_MIN = 68
 CONTENT_HEADER_BASE = 42
 CONTENT_BODY_BASE = 62  # ~20% larger than prior 52
 CONTENT_LINE_FACTOR = 1.85
@@ -460,18 +462,20 @@ def _render_cover(
 
     max_w = int(w * 0.86)
     prepared: list[tuple[str, ImageFont.ImageFont]] = []
-    for clean in lines:
+    n = len(lines)
+    for i, clean in enumerate(lines):
+        is_punch = i == n - 1 and n >= 2
         _, font = _fit_single_line(
             clean,
             max_width=max_w,
-            base_size=COVER_TITLE_BASE,
+            base_size=COVER_PUNCH_BASE if is_punch else COVER_TITLE_BASE,
             scale=scale,
             weight="black",
-            min_size=COVER_TITLE_MIN,
+            min_size=COVER_PUNCH_MIN if is_punch else COVER_TITLE_MIN,
         )
         prepared.append((clean, font))
 
-    gap = int(28 * scale)
+    gap = int(26 * scale)
     # Anchor in gradient-dense zone (30~40% from top)
     y = int(h * COVER_TEXT_Y_RATIO)
 

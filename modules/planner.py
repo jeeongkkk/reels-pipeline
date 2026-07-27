@@ -240,13 +240,42 @@ def build_planner_prompt(
 {roles_table}
 
 | 장 | phase | 써야 할 것 | 예시 톤 |
-| 1 | HOOK (COVER) | 호기심·긴장 훅. 모르면 손해/놓치는 포인트 | "2026 중소기업 바우처, 이거 모르면 지원금 다 날립니다" |
+| 1 | HOOK (COVER) | **스크롤 스탑 훅**. 뉴스 제목 복붙 금지. 긴장·손해·반전 | 아래 COVER 공식 참고 |
 | 2 | PROBLEM | 독자가 겪는 위기. **숫자로 공포** | "문서 유출 한 번에 평균 3억 손해" |
 | 3 | SOLUTION | 뉴스/팩트 핵심만. 누가·무엇을·선정/발표 | "사이버다임, 기술보호 바우처 공급기업 선정" |
 | 4 | BENEFIT | 도입 시 **구체 이득** (%, 원, 기간, 기능) | "도입 비용 80% 국가 지원, 문서중앙화 완비" |
 | 5 | ACTION | 당장 할 **행동 지침** (서류·기한·절차) | "신청 방법 및 필수 서류 3가지" |
 | 6 | INSIGHT | 업계 트렌드에 대한 **전문가 해석**. 단순 요약 금지 | "바우처는 비용 절감이 아니라 리스크 이전 장치" |
 | 7 | SUMMARY | 앞 내용 복붙 금지. 실행 가능한 액션/최종 인사이트 3~4개 (각 <=20자) | "핵심 체크 포인트" + 액션 리스트 |
+
+## 스토리 일관성 (100점 필수)
+- **한 편 = 하나의 주제만**. 표지에서 던진 핵심 키워드(예: 증시/바우처/공고명)가 2~7장 전체에 관통해야 함
+- 표지가 "증시전망"이면 본문에 다른 지원사업·브랜드 챌린지를 끼워 넣지 말 것
+- 모든 CONTENT/SUMMARY 문장은 위 스크랩 팩트에서 나온 **숫자·고유명·기한**을 최소 1개 이상 포함
+- 팩트에 없는 일반론("전문가 상담 필수", "정책 변화 주목")만으로 장 채우기 금지
+
+## COVER 훅 공식 (단조로움 절대 금지)
+title_lines는 **정확히 3줄** (2줄 허용하되 3줄 권장). 구조:
+
+1줄(셋업): 대상·맥락 (짧고 담백)  
+2줄(긴장): 반전·손해·경고 ("이거 모르면", "지금 놓치면", "대부분 틀린")  
+3줄(펀치): **가장 센 결과/숫자/명령** (가장 굵게 읽힐 한 방)
+
+좋은 예:
+- ["직원 없이 월천", "대표만 아는", "5가지 습관"]
+- ["2026 기술보호 바우처", "이거 모르면", "지원금 다 날림"]
+- ["코스피 5500?", "정책·유동성 없으면", "장밋빛 착각"]
+
+나쁜 예 (실패):
+- ["2026 증시전망", "정책과 유동성", "붉은말처럼 상승"] ← 뉴스 제목 나열, 긴장 없음
+- 세 줄 모두 비슷한 길이·비슷한 톤의 요약
+- "~전망", "~동향", "~여건" 같은 보도자료 단어
+
+COVER 추가 규칙:
+- 3줄 중 **최소 1줄에 숫자 또는 강한 동사성 명사**(날림/증발/필수/금지/폭등/붕괴)
+- 독자에게 말 걸기: "너/당신/대표/실무자" 또는 "모르면/놓치면"
+- 각 줄 6~14자, 총합 40자 전후
+- category_tag는 주제 핵심 해시 1개
 
 ## 금지 (Forbidden Fluff) - 한 줄이라도 나오면 실패
 - 중요하다 / 기대된다 / 필요성이 대두된다 / 지속 가능한 성장
@@ -271,7 +300,8 @@ CONTENT(2~6장)마다 content_variant를 "A" 또는 "B"로 선택.
 ### 타입 A (핵심 강조형) - 팩트를 세게 때릴 때
 - content_variant: "A"
 - explanations: 2~3개, 각 <=25자
-- 강조할 핵심어는 *별표*로 감싸기 (예: "*매출과 연결되는 일*을 먼저")
+- **필수**: explanations 중 최소 1개에 *별표 강조* (핵심 숫자·키워드)
+  예: "*코스피 5,500* 목표", "마감 *D-7* 고정"
 - main_statement / detailed_lines: 빈 값 또는 생략
 - 추천 phase: PROBLEM, SOLUTION
 
@@ -281,24 +311,23 @@ CONTENT(2~6장)마다 content_variant를 "A" 또는 "B"로 선택.
 - detailed_lines: **문자열 배열 3~4개**, 각 항목 <=30자
   - 한 항목 = 화면 한 줄 = 개조식 팩트 1개
   - 문장 이어붙이기 금지, 마침표 금지, 서술형 종결 금지
-  - 강조어는 *별표*로 감싸기 (렌더러가 테라코타 포인트 컬러로 표시)
+  - **필수**: detailed_lines 중 최소 1개에 *별표 강조*
 - explanations: [] (비움)
 - 추천 phase: BENEFIT, ACTION, INSIGHT
 - `detailed_paragraph` 필드는 **폐기됨**. 절대 쓰지 말 것
 
 ## 필드
 ### COVER (1장)
-- title_lines: 2~3개 (훅을 호흡 단위로 분해)
+- title_lines: **3줄 권장** (셋업 / 긴장 / 펀치) — 위 COVER 훅 공식  STRICT
 - category_tag: "#바우처" 등 짧은 해시태그
 - image_prompt: **영어**, COVER만. **아이폰 폰카/UGC 일상 스냅**만 허용
   - 화려한 인물·비현실 배경·스튜디오 화보 절대 금지
   - **강제**: 영수증, 커피가 놓인 지저분한 책상, 폰을 든 손, 자연스러운 뒷모습 등
     누군가 일상에서 무심코 찍은 듯한 현실 사물/씬
   - 예: "messy desk with crumpled receipts, iced coffee, tangled charger, natural window light"
-  - 예: "hand holding an iPhone over a cafe table with latte rings, candid imperfect framing"
-  - 예: "back view of a person walking with a tote bag on a weekday street, phone snapshot"
   - **금지**: studio lighting, Annie Leibovitz, cinematic, commercial portrait, glossy skin, AI look
 - main_title: title_lines 합친 백업
+- hook: title_lines를 한 줄로 합친 숏훅 (28자 전후, 펀치 우선)
 
 ### CONTENT (2~6장)
 - section_number: "1"~"5" (장 순서대로)
@@ -327,9 +356,10 @@ CONTENT(2~6장)마다 content_variant를 "A" 또는 "B"로 선택.
   "slides": [
     {{
       "slide_type": "COVER",
-      "title_lines": ["2026 기술보호 바우처", "이거 모르면", "지원금 다 날립니다"],
+      "title_lines": ["2026 기술보호 바우처", "이거 모르면", "지원금 다 날림"],
       "category_tag": "#바우처",
-      "main_title": "2026 기술보호 바우처 이거 모르면 지원금 다 날립니다",
+      "main_title": "2026 기술보호 바우처 이거 모르면 지원금 다 날림",
+      "hook": "바우처 모르면 지원금 날림",
       "image_prompt": "messy Korean office desk with crumpled receipts, iced coffee cup, open laptop half out of frame, tangled charging cable, natural window light, candid iPhone snapshot"
     }},
     {{

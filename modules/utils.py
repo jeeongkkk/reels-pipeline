@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     unsplash_access_key: str = ""
     tavily_api_key: str = ""
-    tavily_days: int = 30  # Tavily search window – only facts from last N days
+    tavily_days: int = 7  # Tavily search window – only facts from last N days
     tavily_skip_ddg_fallback: bool = True  # skip DuckDuckGo when Tavily key is set
     serpapi_api_key: str = ""
     instagram_username: str = ""
