@@ -60,6 +60,7 @@ async def render_card_news_project(
     draft_mode: bool = False,  # unused
     make_video: bool = False,  # ignored – video path removed
     on_progress: ProgressFn | None = None,
+    ig_handle: str = "",
 ) -> Path:
     """Card script → hybrid backgrounds → retina PNG → ZIP.
 
@@ -138,6 +139,7 @@ async def render_card_news_project(
         brand_color=color,
         logo=logo,
         highlight_mode=highlight_mode,
+        ig_handle=ig_handle,
     )
 
     _emit(on_progress, 88, "초고화질 PNG ZIP 패키징 중...")

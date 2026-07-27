@@ -65,6 +65,7 @@ async def run_full_studio_pipeline(
     make_video: bool = False,
     category_id: str | None = None,
     custom_facts: list[str] | None = None,
+    ig_handle: str = "",
 ) -> StudioRunResult:
     """One-shot: (optional category topic pick) → research → hook → render."""
     from modules.topic_picker import pick_topic_for_category
@@ -142,6 +143,7 @@ async def run_full_studio_pipeline(
         highlight_mode=highlight_mode,
         draft_mode=draft_mode,
         make_video=make_video,
+        ig_handle=ig_handle,
     )
 
     script_data: dict[str, Any] = {}

@@ -29,6 +29,7 @@ def _render_all_sync(
     brand_color: str,
     logo: str,
     highlight_mode: str = "color",
+    ig_handle: str = "",
 ) -> list[Path]:
     """Sync entry used by card_capture_worker (PIL, not Playwright)."""
     del highlight_mode  # legacy compat
@@ -41,6 +42,7 @@ def _render_all_sync(
         output_dir,
         brand_color=brand_color or "#0055FF",
         logo=logo,
+        ig_handle=ig_handle,
     )
 
 
@@ -52,6 +54,7 @@ async def render_slides_to_pngs(
     brand_color: str = "#0055FF",
     logo: str = "authority",
     highlight_mode: str = "color",
+    ig_handle: str = "",
 ) -> list[Path]:
     """Render slides to retina PNGs via PIL Insight layouts."""
     if not backgrounds:
@@ -68,5 +71,6 @@ async def render_slides_to_pngs(
             brand_color,
             logo,
             highlight_mode,
+            ig_handle,
         ),
     )

@@ -53,6 +53,7 @@ async def render_project(
     highlight_mode: str = "color",
     draft_mode: bool = False,
     make_video: bool = False,
+    ig_handle: str = "",
 ) -> Path:
     """Produce card ZIP (card_news) or final reel mp4 (other modes)."""
     prod_mode = parse_mode(mode)
@@ -85,6 +86,7 @@ async def render_project(
             draft_mode=draft_mode,
             make_video=make_video,
             on_progress=on_progress,
+            ig_handle=ig_handle,
         )
 
     # Video modes only – keep moviepy/whisper lazy so Streamlit Cloud card-news works

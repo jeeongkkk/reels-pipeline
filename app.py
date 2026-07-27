@@ -338,22 +338,23 @@ if page == "🎬 새 제작":
         if mode == ProductionMode.CARD_NEWS:
             st.markdown("**카드뉴스 옵션**")
             brand_color = st.color_picker(
-                "브랜드 포인트 컬러 (Terracotta)",
+                "브랜드 포인트 컬러 (표지 강조 박스)",
                 value="#DD5138",
             )
-            highlight_mode = st.radio(
-                "훅 하이라이트 스타일",
-                ["color", "box"],
-                format_func=lambda x: "바이올렛 글자" if x == "color" else "바이올렛 박스",
-                horizontal=True,
+            ig_handle = st.text_input(
+                "표지 인스타 주소",
+                placeholder="@with_choyool",
+                help="표지 제목 위에 표시됩니다. @ 없이 입력해도 됩니다.",
+                key="cover_ig_handle",
             )
+            highlight_mode = "box"
             st.caption(
-                "Dark Minimal Magazine · #151515 / #DD5138 · "
-                "WITH CHOYOOL logo · PIL · 레티나 PNG"
+                "표지: 로고 없음 · 하단 좌측 큰 제목 · 포인트 컬러 후킹 박스 · "
+                "본문만 WITH CHOYOOL 로고"
             )
         else:
             use_tts = True
-
+            ig_handle = ""
         with st.expander("📋 스크랩 직접 입력 (선택)", expanded=False):
             custom_scrap = st.text_area(
                 "내용 붙여넣기 (한 줄에 하나의 팩트·기사 요약·URL)",
@@ -462,6 +463,7 @@ if page == "🎬 새 제작":
                         make_video=make_video,
                         category_id=category.id if use_auto else None,
                         custom_facts=user_facts or None,
+                        ig_handle=ig_handle if mode == ProductionMode.CARD_NEWS else "",
                     )
                 )
                 progress.progress(100, text="완료")

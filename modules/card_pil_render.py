@@ -31,14 +31,19 @@ COVER_DIM_ALPHA = 0.62  # legacy
 COVER_GRAD_TOP_ALPHA = 220  # legacy top-down
 COVER_GRAD_BOTTOM_ALPHA = 240
 COVER_GRAD_SOLID_RATIO = 0.22  # solid black band at bottom
-COVER_GRAD_FADE_RATIO = 0.32  # soft fade upward into photo
-COVER_TEXT_Y_RATIO = 0.62  # headline block starts in lower band
-COVER_TITLE_BASE = 72  # all cover lines same size
-COVER_TITLE_MIN = 44
-COVER_LEFT_RATIO = 0.08  # left margin (~hospital-cover style)
-COVER_MAX_W_RATIO = 0.84
-COVER_LINE_GAP = 18
-COVER_BOTTOM_MARGIN = 140
+COVER_GRAD_FADE_RATIO = 0.34  # soft fade upward into photo
+COVER_TEXT_Y_RATIO = 0.55  # headline block starts in lower band
+COVER_TITLE_BASE = 96  # large cover type (ref image 2)
+COVER_TITLE_MIN = 56
+COVER_LEFT_RATIO = 0.08
+COVER_MAX_W_RATIO = 0.86
+COVER_LINE_GAP = 20
+COVER_BOTTOM_MARGIN = 120
+COVER_HANDLE_SIZE = 34
+COVER_HANDLE_GAP = 28
+COVER_BOX_PAD_X = 18
+COVER_BOX_PAD_Y = 12
+COVER_BOX_RADIUS = 10
 CONTENT_HEADER_BASE = 42
 CONTENT_BODY_BASE = 62
 CONTENT_LINE_FACTOR = 1.85
@@ -468,6 +473,57 @@ def _draw_left_line(
     return y + (bottom - top)
 
 
+def _draw_left_highlight_box(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    *,
+    y: int,
+    x: int,
+    font: ImageFont.ImageFont,
+    accent: tuple[int, int, int],
+    scale: int,
+) -> int:
+    """Brand-color rounded box behind hook line (Tipstagram-style punch)."""
+    plain = _plain_from_emphasis(text)
+    if not plain:
+        return y
+    left, top, right, bottom = _text_bbox(plain, font)
+    tw = right - left
+    th = bottom - top
+    pad_x = COVER_BOX_PAD_X * scale
+    pad_y = COVER_BOX_PAD_Y * scale
+    radius = max(4, COVER_BOX_RADIUS * scale)
+    box = [
+        x - pad_x,
+        y - pad_y,
+        x + tw + pad_x,
+        y + th + pad_y,
+    ]
+    draw.rounded_rectangle(box, radius=radius, fill=accent)
+    draw.text((x - left, y - top), plain, fill=PURE_WHITE, font=font)
+    return y + th + pad_y
+
+
+def _normalize_ig_handle(raw: str) -> str:
+    h = (raw or "").strip()
+    if not h:
+        return ""
+    h = re.sub(r"^https?://(www\.)?instagram\.com/", "", h, flags=re.I)
+    h = h.strip("/").split("?")[0].split("/")[0]
+    h = h.lstrip("@").strip()
+    if not h:
+        return ""
+    return f"@{h}"
+
+
+def _cover_highlight_index(lines: list[str]) -> int:
+    """Prefer *starred* line; else last line (punch)."""
+    for i, ln in enumerate(lines):
+        if "*" in (ln or ""):
+            return i
+    return max(0, len(lines) - 1)
+
+
 def _fit_uniform_lines(
     lines: list[str],
     *,
@@ -579,46 +635,85 @@ def _render_cover(
     brand_color: str,
     logo: str,
     scale: int,
+    ig_handle: str = "",
 ) -> Image.Image:
-    """COVER – bottom black↑fade; same-size left-aligned headline in lower band."""
-    del brand_color
+    """COVER – no logo; IG handle + large left title; brand box on punch line."""
+    del logo  # cover never shows brand logo
+    accent = _hex_rgb(brand_color)
     _apply_bottom_linear_gradient(base)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
-    draw_logo(base, scale=scale, position="top", brand_name=logo)
 
     lines = _as_lines(slide.get("title_lines"))
     if not lines:
         title = _clean_display(str(slide.get("main_title") or slide.get("hook") or ""))
         lines = [title] if title else []
     lines = [ln for ln in lines[:4] if ln]
-    if not lines:
+    handle = _normalize_ig_handle(
+        ig_handle or str(slide.get("ig_handle") or slide.get("instagram") or "")
+    )
+    if not lines and not handle:
         return base
 
     max_w = int(w * COVER_MAX_W_RATIO)
     left_x = int(w * COVER_LEFT_RATIO)
-    _, font = _fit_uniform_lines(
-        lines,
-        max_width=max_w,
-        base_size=COVER_TITLE_BASE,
-        scale=scale,
-        weight="extrabold",
-        min_size=COVER_TITLE_MIN,
-        family="paperlogy",
-    )
+    title_font: ImageFont.ImageFont | None = None
+    if lines:
+        _, title_font = _fit_uniform_lines(
+            lines,
+            max_width=max_w - COVER_BOX_PAD_X * 2 * scale,
+            base_size=COVER_TITLE_BASE,
+            scale=scale,
+            weight="extrabold",
+            min_size=COVER_TITLE_MIN,
+            family="paperlogy",
+        )
 
+    handle_font = _font(COVER_HANDLE_SIZE * scale, weight="medium", family="pretendard")
     gap = int(COVER_LINE_GAP * scale)
-    stack_h = sum(_text_height(t, font) for t in lines) + gap * max(0, len(lines) - 1)
-    # Anchor block near bottom (hospital-cover / Success_Growreader style)
+    hi = _cover_highlight_index(lines) if lines else -1
+    box_extra = COVER_BOX_PAD_Y * scale if hi >= 0 else 0
+
+    stack_h = 0
+    if handle:
+        stack_h += _text_height(handle, handle_font) + COVER_HANDLE_GAP * scale
+    if lines and title_font is not None:
+        for i, t in enumerate(lines):
+            stack_h += _text_height(t, title_font)
+            if i == hi:
+                stack_h += box_extra
+            if i < len(lines) - 1:
+                stack_h += gap
+
     max_bottom = h - COVER_BOTTOM_MARGIN * scale
     y = max_bottom - stack_h
     min_y = int(h * COVER_TEXT_Y_RATIO)
     if y < min_y:
         y = min_y
 
-    for clean in lines:
-        y = _draw_left_line(draw, clean, y=y, x=left_x, font=font, fill=PURE_WHITE)
-        y += gap
+    if handle:
+        y = _draw_left_line(
+            draw, handle, y=y, x=left_x, font=handle_font, fill=SOFT_WHITE
+        )
+        y += COVER_HANDLE_GAP * scale
+
+    if lines and title_font is not None:
+        for i, clean in enumerate(lines):
+            if i == hi:
+                y = _draw_left_highlight_box(
+                    draw,
+                    clean,
+                    y=y,
+                    x=left_x,
+                    font=title_font,
+                    accent=accent,
+                    scale=scale,
+                )
+            else:
+                y = _draw_left_line(
+                    draw, clean, y=y, x=left_x, font=title_font, fill=PURE_WHITE
+                )
+            y += gap
 
     return base
 
@@ -860,6 +955,7 @@ def render_slide_pil(
     logo: str = BRAND_FALLBACK,
     slide_index: int = 1,
     slide_total: int = 7,
+    ig_handle: str = "",
 ) -> Path:
     scale = RETINA
     w, h = CARD_W * scale, CARD_H * scale
@@ -874,7 +970,14 @@ def render_slide_pil(
                 base = _fit_cover(raw, w, h)
         else:
             base = Image.new("RGB", (w, h), BG_DARK)
-        img = _render_cover(base, slide, brand_color=color, logo=logo, scale=scale)
+        img = _render_cover(
+            base,
+            slide,
+            brand_color=color,
+            logo=logo,
+            scale=scale,
+            ig_handle=ig_handle,
+        )
     elif slide_type == "SUMMARY":
         base = Image.new("RGB", (w, h), BG_DARK)
         img = _render_summary(base, slide, brand_color=color, logo=logo, scale=scale)
@@ -897,6 +1000,7 @@ def render_all_pil(
     *,
     brand_color: str = DEFAULT_BRAND_COLOR,
     logo: str = BRAND_FALLBACK,
+    ig_handle: str = "",
 ) -> list[Path]:
     ensure_dir(output_dir)
     out: list[Path] = []
@@ -913,6 +1017,7 @@ def render_all_pil(
                 logo=logo,
                 slide_index=i + 1,
                 slide_total=total,
+                ig_handle=ig_handle,
             )
         )
     return out
