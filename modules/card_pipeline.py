@@ -55,7 +55,7 @@ async def render_card_news_project(
     reference=None,
     project_dir: Path,
     use_tts: bool = False,  # unused – kept for API compat
-    brand_color: str = "#0055FF",
+    brand_color: str = "#DD5138",
     highlight_mode: str = "color",
     draft_mode: bool = False,  # unused
     make_video: bool = False,  # ignored – video path removed
@@ -69,8 +69,12 @@ async def render_card_news_project(
         logger.info("make_video ignored – card_news outputs PNG/ZIP only")
 
     brand = load_brand_config()
-    logo = (brand.get("brand", {}) or {}).get("name", "authority").lower()
-    default_color = brand.get("card_news", {}).get("brand_color", "#0055FF")
+    logo = (
+        brand.get("card_news", {}).get("brand_name")
+        or (brand.get("brand", {}) or {}).get("name")
+        or "WITH CHOYOOL"
+    )
+    default_color = brand.get("card_news", {}).get("brand_color", "#DD5138")
     color = brand_color or default_color
     facts = research_facts or []
 

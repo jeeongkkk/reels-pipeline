@@ -2,8 +2,8 @@
 # Module 2 (대본), Module 5 (자막·비주얼)에서 참조합니다.
 
 brand:
-  name: "Authority Reels"
-  tagline: "B2B 마케팅 인사이트를 60초로"
+  name: "WITH CHOYOOL"
+  tagline: "All in Business"
   industry: "B2B Marketing & Consulting"
 
 # ── 톤앤매너 ────────────────────────────────────────────────
@@ -137,9 +137,10 @@ production:
 
 # ── Card news (B2B high-end PNG) ─────────────────────────────
 card_news:
-  brand_color: "#876E9B"       # Violet Echo
-  highlight_mode: "color"      # color | box
+  brand_color: "#DD5138"       # Terracotta – Dark Minimal Magazine
+  highlight_mode: "box"        # header box on content slides
   font_family: "Pretendard"
+  brand_name: "WITH CHOYOOL"
   slides_min: 6
   slides_max: 8
   device_scale_factor: 2       # 1080×1920 viewport → 2160×3840 PNG

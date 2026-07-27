@@ -271,6 +271,7 @@ CONTENT(2~6장)마다 content_variant를 "A" 또는 "B"로 선택.
 ### 타입 A (핵심 강조형) - 팩트를 세게 때릴 때
 - content_variant: "A"
 - explanations: 2~3개, 각 <=25자
+- 강조할 핵심어는 *별표*로 감싸기 (예: "*매출과 연결되는 일*을 먼저")
 - main_statement / detailed_lines: 빈 값 또는 생략
 - 추천 phase: PROBLEM, SOLUTION
 
@@ -280,6 +281,7 @@ CONTENT(2~6장)마다 content_variant를 "A" 또는 "B"로 선택.
 - detailed_lines: **문자열 배열 3~4개**, 각 항목 <=30자
   - 한 항목 = 화면 한 줄 = 개조식 팩트 1개
   - 문장 이어붙이기 금지, 마침표 금지, 서술형 종결 금지
+  - 강조어는 *별표*로 감싸기 (렌더러가 테라코타 포인트 컬러로 표시)
 - explanations: [] (비움)
 - 추천 phase: BENEFIT, ACTION, INSIGHT
 - `detailed_paragraph` 필드는 **폐기됨**. 절대 쓰지 말 것
@@ -305,14 +307,12 @@ CONTENT(2~6장)마다 content_variant를 "A" 또는 "B"로 선택.
 - (A) explanations만 / (B) main_statement + detailed_lines만
 - sub_point_title / sub_point_text / detailed_paragraph 사용 금지
 
-### SUMMARY (7장)
-- main_title: 위계 큰 제목 (예: "핵심 체크 포인트")
-- summary_list: **정확히 3개 또는 4개**
-- **앞 슬라이드 문장 복붙·단순 잘라내기 엄격 금지**
-- 독자가 당장 머릿속에 새겨야 할 **실행 가능한 액션 플랜(Actionable takeaway)** 또는 **최종 인사이트**로 재가공
-- 각 항목 **20자 이내**, 명사형 종결, 마침표 금지, 번호 없이
-- 좋은 예: "마감 D-7 캘린더 고정", "서류 3종 오늘 준비", "지원율 80% 재확인"
-- 나쁜 예: 앞장 문장 그대로 반복, "~습니다" 서술, 20자 초과 장문
+### SUMMARY / OUTRO (마지막 장)
+- main_title: 아웃로 임팩트 카피 (예: "당신의 사수가 되어드립니다")
+- title_lines: 가능하면 2~3개로 호흡 분해 (예: ["당신의", "사수가", "되어드립니다"])
+- summary_list: 선택 (짧으면 서브카피로 쓰일 수 있음)
+- 다크 미니멀 매거진 톤: 거대 타이포, 여백, 감성 카피
+- 앞 슬라이드 문장 복붙 금지
 
 {EDITOR_STYLE_RULE}
 {KOREAN_ONLY_RULE}

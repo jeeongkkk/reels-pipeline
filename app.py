@@ -331,15 +331,15 @@ if page == "🎬 새 제작":
         )
 
         use_tts = False
-        brand_color = "#0055FF"
+        brand_color = "#DD5138"
         highlight_mode = "color"
         make_video = False
         draft_mode = False
         if mode == ProductionMode.CARD_NEWS:
             st.markdown("**카드뉴스 옵션**")
             brand_color = st.color_picker(
-                "브랜드 포인트 컬러 (Violet Echo)",
-                value="#0055FF",
+                "브랜드 포인트 컬러 (Terracotta)",
+                value="#DD5138",
             )
             highlight_mode = st.radio(
                 "훅 하이라이트 스타일",
@@ -348,8 +348,8 @@ if page == "🎬 새 제작":
                 horizontal=True,
             )
             st.caption(
-                "Pretendard · FACTOSQUARE layout · Violet Echo · "
-                "Fal Flux Schnell · PIL 3-layout · 레티나 PNG"
+                "Dark Minimal Magazine · #151515 / #DD5138 · "
+                "WITH CHOYOOL logo · PIL · 레티나 PNG"
             )
         else:
             use_tts = True

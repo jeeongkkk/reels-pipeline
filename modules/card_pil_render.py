@@ -1,4 +1,4 @@
-"""PIL Insight card compositor – COVER / CONTENT / SUMMARY (no AI-looking chrome)."""
+"""PIL Dark Minimal Magazine compositor – COVER / CONTENT / OUTRO."""
 
 from __future__ import annotations
 
@@ -16,64 +16,37 @@ CARD_W = 1080
 CARD_H = 1920
 RETINA = 2
 
+# ── Dark Minimal Magazine palette ─────────────────────────────
+BG_DARK = (21, 21, 21)  # #151515
+ACCENT = (221, 81, 56)  # #DD5138 terracotta
 PURE_WHITE = (255, 255, 255)
-INK = (17, 17, 17)  # #111111
-SOFT_INK = (51, 51, 51)  # #333333 – Type B detail lines
-WHITE = (255, 255, 255)
-BRAND_GRAY = (100, 100, 100)
-COBALT = (0, 85, 255)  # #0055FF
+SOFT_WHITE = (221, 221, 221)  # #DDDDDD secondary
+INK = PURE_WHITE
 
-MARGIN_X = 72
-BRAND_DEFAULT = "Authority Reels"
+MARGIN_X = 80
+BRAND_FALLBACK = "WITH CHOYOOL"
+DEFAULT_BRAND_COLOR = "#DD5138"
 
-# Highlight box breathing room (logical px, multiplied by scale)
-BOX_PAD_X = 28
-BOX_PAD_Y = 25  # legacy symmetric fallback
-BOX_PAD_TOP = 25
-BOX_PAD_BOTTOM = 35
-BOX_MIN_GAP = 10  # minimum clear air between stacked cover boxes
-
-COVER_TITLE_BASE = 104
-# COVER hook hierarchy (logical px @ 1080)
-COVER_LEAD_BASE = 88   # setup lines (smaller)
-COVER_PUNCH_BASE = 120  # last 1~2 punch lines (bigger, scroll-stop)
-CONTENT_SECTION_BASE = 44
-CONTENT_LINE_BASE = 78  # Type A body lines
-CONTENT_STATEMENT_BASE = 90  # Type B main_statement (Black, >=90px)
-CONTENT_DETAIL_BASE = 55  # Type B detailed_lines (Regular)
-DETAIL_LINE_FACTOR = 1.7  # 1.6~1.8x font size between detail lines
-SUMMARY_HEAD_BASE = 70  # ExtraBold in cobalt box (absolute grid)
-SUMMARY_NUM_SIZE = 70  # Bold cobalt numbers
-SUMMARY_ITEM_SIZE = 65  # Bold/ExtraBold body – match number weight
-SUMMARY_INK = (17, 17, 17)  # #111111
-# Absolute layout on 1080x1920 logical canvas (multiplied by RETINA scale)
-SUMMARY_TITLE_X = 120
-SUMMARY_TITLE_Y = 350
-SUMMARY_LIST_Y0 = 600
-SUMMARY_LIST_STEP = 140
-SUMMARY_NUM_X = 120
-SUMMARY_TEXT_X = 220
-
-# COVER – lead = adaptive contrast text (no box); punch = #0055FF box + centered white
-COVER_HL = (0, 85, 255)  # #0055FF cobalt
-COVER_LEAD_FILL = (255, 255, 255)  # fallback if sampling fails
-COVER_PAD_X = 35
-COVER_PAD_Y = 20  # equal top/bottom so glyph can sit dead-center
-COVER_LINE_MARGIN = 15
-COVER_DIM_ALPHA = 0.50  # baseline; actual alpha is adaptive per photo
-COVER_DIM_MIN = 0.38
-COVER_DIM_MAX = 0.64
-COVER_BLOCK_MAX_W = 0.90
-COVER_LEAD_DARK = (17, 17, 17)  # #111111 on bright regions
-
-# Type A Black lines: max(bbox, font.size) + extra leading (logical px)
-CONTENT_A_LINE_GAP = 40
-
-# Push body typography down toward optical center
-CONTENT_TOP_SHIFT = 0.12
+COVER_DIM_ALPHA = 0.62
+COVER_TITLE_BASE = 92
+COVER_TITLE_MIN = 56
+CONTENT_HEADER_BASE = 42
+CONTENT_BODY_BASE = 52
+CONTENT_LINE_FACTOR = 1.8
+OUTRO_TITLE_BASE = 110
+HEADER_PAD_X = 22
+HEADER_PAD_TOP = 12
+HEADER_PAD_BOTTOM = 16
+LOGO_TOP_Y = 120  # logical px
+LOGO_MAX_W = 280
+LOGO_MAX_H = 160
 
 FONTS_DIR = ROOT_DIR / "assets" / "fonts" / "Pretendard"
 WIN_FONTS = Path("C:/Windows/Fonts")
+LOGO_CANDIDATES = (
+    ROOT_DIR / "logo.png",
+    ROOT_DIR / "assets" / "logo.png",
+)
 
 
 def _resolve_font(name: str) -> Path | None:
@@ -121,7 +94,6 @@ def _text_width(text: str, font: ImageFont.ImageFont) -> float:
 
 
 def _text_bbox(text: str, font: ImageFont.ImageFont) -> tuple[int, int, int, int]:
-    """Return (left, top, right, bottom) relative to draw origin."""
     try:
         box = font.getbbox(text or " ")
         return int(box[0]), int(box[1]), int(box[2]), int(box[3])
@@ -139,52 +111,59 @@ def _text_height(text: str, font: ImageFont.ImageFont) -> int:
     return max(1, bottom - top)
 
 
-def _advance_y(text: str, font: ImageFont.ImageFont, *, margin: int) -> int:
-    """Next-line Y offset from measured glyph box + explicit margin (never overlaps)."""
-    return _text_height(text, font) + max(0, int(margin))
-
-
-def _clean_display(text: str) -> str:
-    """Strip trailing periods / AI punctuation before draw (titles, Type A lines)."""
-    t = re.sub(r"\s+", " ", (text or "").strip())
+def _clean_display(text: str, *, keep_emphasis: bool = False) -> str:
+    t = re.sub(r"[ \t]+", " ", (text or "").strip())
     t = t.rstrip(".。…!")
+    if not keep_emphasis:
+        t = t.replace("*", "")
     return t
 
 
-def _as_lines(raw: Any) -> list[str]:
+def _as_lines(raw: Any, *, keep_emphasis: bool = False) -> list[str]:
     if isinstance(raw, list):
-        return [_clean_display(str(x)) for x in raw if str(x).strip()]
+        return [
+            _clean_display(str(x), keep_emphasis=keep_emphasis)
+            for x in raw
+            if str(x).strip()
+        ]
     if isinstance(raw, str) and raw.strip():
-        # Prefer explicit newlines from LLM only – never character-wrap
-        return [_clean_display(p) for p in raw.split("\n") if p.strip()]
+        return [
+            _clean_display(p, keep_emphasis=keep_emphasis)
+            for p in raw.split("\n")
+            if p.strip()
+        ]
     return []
 
 
-def _line_height(font_size: int, *, scale: int, factor: float = 1.65) -> int:
-    return max(1, int(font_size * scale * factor))
+def _parse_emphasis(text: str) -> list[tuple[str, bool]]:
+    """Split '*강조*' markers into (segment, emphasized) parts."""
+    raw = text or ""
+    parts: list[tuple[str, bool]] = []
+    i = 0
+    while i < len(raw):
+        if raw[i] == "*":
+            j = raw.find("*", i + 1)
+            if j > i + 1:
+                parts.append((raw[i + 1 : j], True))
+                i = j + 1
+                continue
+        nxt = raw.find("*", i)
+        if nxt < 0:
+            chunk = raw[i:]
+            if chunk:
+                parts.append((chunk, False))
+            break
+        chunk = raw[i:nxt]
+        if chunk:
+            parts.append((chunk, False))
+        i = nxt
+    if not parts:
+        return [(raw.replace("*", ""), False)]
+    return parts
 
 
-def _detail_lines_of(slide: dict[str, Any]) -> list[str]:
-    """Type B detail lines – array only, prose is retired."""
-    lines = _as_lines(slide.get("detailed_lines"))
-    if lines:
-        return lines
-    # Legacy prose payload: split on sentence boundaries, never wrap
-    legacy = str(slide.get("detailed_paragraph") or "").strip()
-    if not legacy:
-        return []
-    parts = [p.strip() for p in re.split(r"(?<=[.。!?])\s+|[\n·•]", legacy) if p.strip()]
-    return [_clean_display(p) for p in parts][:4]
-
-
-def _is_content_type_b(slide: dict[str, Any]) -> bool:
-    raw = str(slide.get("content_variant") or slide.get("layout_variant") or "").strip().upper()
-    if raw in {"B", "TYPE_B", "TYPE-B", "DETAIL", "DETAILED", "PARAGRAPH"}:
-        return True
-    if raw in {"A", "TYPE_A", "TYPE-A", "PUNCH", "BULLET"}:
-        return False
-    statement = str(slide.get("main_statement") or "").strip()
-    return bool(statement and _detail_lines_of(slide))
+def _plain_from_emphasis(text: str) -> str:
+    return "".join(seg for seg, _ in _parse_emphasis(text))
 
 
 def _fit_single_line(
@@ -196,22 +175,21 @@ def _fit_single_line(
     weight: str = "black",
     min_size: int = 28,
 ) -> tuple[int, ImageFont.ImageFont]:
-    """Shrink font to fit one semantic line – never wrap mid-phrase."""
-    text = _clean_display(text)
+    plain = _plain_from_emphasis(text)
     size = base_size
     while size >= min_size:
         font = _font(size * scale, weight=weight)
-        if _text_width(text, font) <= max_width:
+        if _text_width(plain, font) <= max_width:
             return size, font
         size -= 2
     return min_size, _font(min_size * scale, weight=weight)
 
 
 def _hex_rgb(color: str) -> tuple[int, int, int]:
-    c = (color or "#0055FF").lstrip("#")
+    c = (color or DEFAULT_BRAND_COLOR).lstrip("#")
     if len(c) == 6:
         return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
-    return COBALT
+    return ACCENT
 
 
 def _fit_cover(img: Image.Image, w: int, h: int) -> Image.Image:
@@ -230,231 +208,219 @@ def _fit_cover(img: Image.Image, w: int, h: int) -> Image.Image:
     return img.crop(box).resize((w, h), Image.Resampling.LANCZOS)
 
 
-def _boost_photo_pop(img: Image.Image, *, contrast: float = 1.14, vibrance: float = 1.22) -> Image.Image:
-    """Lift contrast + color for scroll-stopping COVER photos (before soft dim)."""
-    from PIL import ImageEnhance
-
-    out = img.convert("RGB")
-    out = ImageEnhance.Contrast(out).enhance(contrast)
-    out = ImageEnhance.Color(out).enhance(vibrance)
-    out = ImageEnhance.Brightness(out).enhance(1.03)
-    return out
+def _draw_full_dim(base: Image.Image, *, alpha: float) -> None:
+    a = max(0.0, min(1.0, float(alpha)))
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, int(255 * a)))
+    composited = Image.alpha_composite(base.convert("RGBA"), overlay)
+    base.paste(composited.convert("RGB"))
 
 
-def _draw_full_dim(base: Image.Image, alpha: float = 0.28) -> None:
-    """Soft black veil so photo stays readable; default ~25-30%."""
-    w, h = base.size
-    alpha = max(0.0, min(1.0, float(alpha)))
-    overlay = Image.new("RGBA", (w, h), (0, 0, 0, int(255 * alpha)))
-    base.paste(Image.alpha_composite(base.convert("RGBA"), overlay).convert("RGB"))
+def _logo_to_rgba(img: Image.Image) -> Image.Image:
+    """Knock out near-black backdrop so logo sits on #151515 cleanly."""
+    rgba = img.convert("RGBA")
+    pixels = rgba.load()
+    w, h = rgba.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = pixels[x, y]
+            if r < 28 and g < 28 and b < 28:
+                pixels[x, y] = (r, g, b, 0)
+    return rgba
 
 
-def _clamp_box(
-    box: tuple[int, int, int, int], w: int, h: int
-) -> tuple[int, int, int, int]:
-    l, t, r, b = box
-    l = max(0, min(w - 1, l))
-    t = max(0, min(h - 1, t))
-    r = max(l + 1, min(w, r))
-    b = max(t + 1, min(h, b))
-    return l, t, r, b
+def _find_logo_path() -> Path | None:
+    for p in LOGO_CANDIDATES:
+        if p.exists() and p.stat().st_size > 100:
+            return p
+    return None
 
 
-def _sample_region_rgb(
-    img: Image.Image, box: tuple[int, int, int, int]
-) -> tuple[float, float, float]:
-    """Average RGB in box (downsampled for speed)."""
-    w, h = img.size
-    l, t, r, b = _clamp_box(box, w, h)
-    crop = img.crop((l, t, r, b)).convert("RGB").resize((24, 24), Image.Resampling.BILINEAR)
-    pixels = list(crop.getdata())
-    n = max(1, len(pixels))
-    return (
-        sum(p[0] for p in pixels) / n,
-        sum(p[1] for p in pixels) / n,
-        sum(p[2] for p in pixels) / n,
-    )
-
-
-def _sample_luminance(img: Image.Image, box: tuple[int, int, int, int]) -> float:
-    r, g, b = _sample_region_rgb(img, box)
-    return 0.299 * r + 0.587 * g + 0.114 * b
-
-
-def _adaptive_cover_dim_alpha(img: Image.Image) -> float:
-    """Brighter title-band photo → stronger black veil."""
-    w, h = img.size
-    band = (int(w * 0.04), int(h * 0.26), int(w * 0.96), int(h * 0.58))
-    lum = _sample_luminance(img, band)
-    # Map lum ~40→DIM_MIN, ~200→DIM_MAX
-    t = (lum - 40.0) / 160.0
-    t = max(0.0, min(1.0, t))
-    alpha = COVER_DIM_MIN + t * (COVER_DIM_MAX - COVER_DIM_MIN)
-    logger.info("COVER adaptive dim lum=%.1f alpha=%.2f", lum, alpha)
-    return alpha
-
-
-def _contrast_ink_for_region(
-    img: Image.Image, box: tuple[int, int, int, int]
-) -> tuple[int, int, int]:
-    """Pick white vs near-black ink from local luminance / blue-heaviness."""
-    r, g, b = _sample_region_rgb(img, box)
-    lum = 0.299 * r + 0.587 * g + 0.114 * b
-    blue_heavy = b >= r + 18 and b >= g + 12
-    # Bright (or bright-warm) → dark ink; dark / blue-tinted → white
-    if lum >= 148:
-        return COVER_LEAD_DARK
-    if lum >= 128 and not blue_heavy:
-        return COVER_LEAD_DARK
-    return WHITE
-
-
-def _draw_text_legible(
-    draw: ImageDraw.ImageDraw,
-    xy: tuple[float, float],
-    text: str,
-    *,
-    font: ImageFont.ImageFont,
-    fill: tuple[int, int, int] = WHITE,
-    scale: int = 1,
-) -> None:
-    """White (or colored) text with thin black stroke for bright photo backgrounds."""
-    stroke = max(1, 2 * scale)
-    try:
-        draw.text(
-            xy,
-            text,
-            font=font,
-            fill=fill,
-            stroke_width=stroke,
-            stroke_fill=(0, 0, 0),
-        )
-    except TypeError:
-        # Older Pillow without stroke – manual 8-dir halo
-        x, y = xy
-        for dx, dy in (
-            (-stroke, 0),
-            (stroke, 0),
-            (0, -stroke),
-            (0, stroke),
-            (-stroke, -stroke),
-            (stroke, -stroke),
-            (-stroke, stroke),
-            (stroke, stroke),
-        ):
-            draw.text((x + dx, y + dy), text, font=font, fill=(0, 0, 0))
-        draw.text(xy, text, font=font, fill=fill)
-
-
-def _draw_highlight_line(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    *,
-    x: int,
-    y: int,
-    font: ImageFont.ImageFont,
-    font_size: int,
-    scale: int,
-    brand: tuple[int, int, int],
-    pad_x: int | None = None,
-    pad_y: int | None = None,
-    pad_top: int | None = None,
-    pad_bottom: int | None = None,
-    after_gap: int | None = None,
-) -> int:
-    """Flat cobalt highlight – no shadow. Asymmetric pad for Hangul."""
-    del font_size
-    text = _clean_display(text)
-    pad_x = pad_x if pad_x is not None else BOX_PAD_X * scale
-    if pad_top is not None or pad_bottom is not None:
-        default_y = pad_y if pad_y is not None else BOX_PAD_Y * scale
-        pt = pad_top if pad_top is not None else default_y
-        pb = pad_bottom if pad_bottom is not None else default_y
-    elif pad_y is not None:
-        pt = pb = pad_y
-    else:
-        pt = BOX_PAD_TOP * scale
-        pb = BOX_PAD_BOTTOM * scale
-
-    # textbbox-relative placement (same math as COVER)
-    left, top, right, bottom = _text_bbox(text, font)
-    text_x = x + pad_x - left
-    text_y = y + pt - top
-    abs_l, abs_t = text_x + left, text_y + top
-    abs_r, abs_b = text_x + right, text_y + bottom
-    box = [abs_l - pad_x, abs_t - pt, abs_r + pad_x, abs_b + pb]
-    draw.rectangle(box, fill=brand)
-    draw.text((text_x, text_y), text, fill=WHITE, font=font)
-    gap = after_gap if after_gap is not None else BOX_MIN_GAP * scale
-    return int(box[3]) + max(BOX_MIN_GAP * scale, gap)
-
-
-def _draw_cover_lead(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    *,
-    current_x: int,
-    current_y: int,
-    font: ImageFont.ImageFont,
-    scale: int,
+def draw_logo(
     base: Image.Image,
-) -> int:
-    """Setup line – adaptive white/dark ink from local photo luminance, NO blue box."""
-    text = _clean_display(text)
-    left, top, right, bottom = _text_bbox(text, font)
-    tw = max(1, right - left)
-    th = max(1, bottom - top)
-    text_x = current_x - left
-    text_y = current_y - top
-    pad = 12 * scale
-    sample = (
-        int(text_x) - pad,
-        int(text_y) - pad,
-        int(text_x + tw) + pad,
-        int(text_y + th) + pad,
+    *,
+    scale: int,
+    position: str = "top",
+    brand_name: str = BRAND_FALLBACK,
+) -> None:
+    """Place brand logo. position: 'top' (center) | 'bottom_right'."""
+    w, h = base.size
+    logo_path = _find_logo_path()
+    draw = ImageDraw.Draw(base)
+
+    if logo_path:
+        with Image.open(logo_path) as raw:
+            logo = _logo_to_rgba(raw)
+        max_w = LOGO_MAX_W * scale
+        max_h = LOGO_MAX_H * scale
+        if position == "bottom_right":
+            max_w = int(LOGO_MAX_W * 0.85 * scale)
+            max_h = int(LOGO_MAX_H * 0.85 * scale)
+        lw, lh = logo.size
+        ratio = min(max_w / max(lw, 1), max_h / max(lh, 1))
+        nw, nh = max(1, int(lw * ratio)), max(1, int(lh * ratio))
+        logo = logo.resize((nw, nh), Image.Resampling.LANCZOS)
+        if position == "bottom_right":
+            x = w - MARGIN_X * scale - nw
+            y = h - 160 * scale - nh
+        else:
+            x = (w - nw) // 2
+            y = LOGO_TOP_Y * scale
+        base.paste(logo, (x, y), logo)
+        return
+
+    # Fallback text wordmark
+    label = re.sub(r"^@", "", brand_name or "").strip() or BRAND_FALLBACK
+    font = _font(28 * scale, weight="medium")
+    tw = _text_width(label, font)
+    th = _text_height(label, font)
+    if position == "bottom_right":
+        x = w - MARGIN_X * scale - int(tw)
+        y = h - 180 * scale
+    else:
+        x = (w - int(tw)) // 2
+        y = LOGO_TOP_Y * scale
+    left, top, _, _ = _text_bbox(label, font)
+    draw.text((x - left, y - top), label, fill=PURE_WHITE, font=font)
+    # Thin vertical accent bar (Young Boss cue)
+    bar_x = x - 18 * scale
+    draw.line(
+        [(bar_x, y), (bar_x, y + th)],
+        fill=PURE_WHITE,
+        width=max(2, scale),
     )
-    fill = _contrast_ink_for_region(base, sample)
-    draw.text((text_x, text_y), text, fill=fill, font=font)
-    return current_y + th + COVER_LINE_MARGIN * scale
 
 
-def _draw_cover_highlight(
+def _draw_centered_line(
     draw: ImageDraw.ImageDraw,
     text: str,
     *,
-    current_x: int,
-    current_y: int,
+    y: int,
+    canvas_w: int,
     font: ImageFont.ImageFont,
-    scale: int,
-    fill: tuple[int, int, int] = COVER_HL,
+    fill: tuple[int, int, int] = PURE_WHITE,
 ) -> int:
-    """Punch line – flat #0055FF box, white Black type vertically centered. No shadow."""
-    text = _clean_display(text)
-    pad_x = COVER_PAD_X * scale
-    pad_y = COVER_PAD_Y * scale
-    line_margin = COVER_LINE_MARGIN * scale
-
-    left, top, right, bottom = _text_bbox(text, font)
-    text_width = max(1, right - left)
-    text_height = max(1, bottom - top)
-
-    box_left = current_x - pad_x
-    box_top = current_y
-    box_right = current_x + text_width + pad_x
-    box_bottom = current_y + text_height + pad_y * 2
-
-    draw.rectangle([box_left, box_top, box_right, box_bottom], fill=fill)
-    text_x = current_x - left
-    text_y = int(round(current_y + (box_bottom - box_top) / 2 - (top + bottom) / 2))
-    draw.text((text_x, text_y), text, fill=WHITE, font=font)
-    return int(box_bottom) + line_margin
+    """Draw one plain centered line; return next Y using 1.0 glyph height (caller adds leading)."""
+    plain = _plain_from_emphasis(text)
+    if not plain:
+        return y
+    left, top, right, bottom = _text_bbox(plain, font)
+    tw = right - left
+    x = (canvas_w - tw) // 2 - left
+    draw.text((x, y - top), plain, fill=fill, font=font)
+    return y + (bottom - top)
 
 
-def _brand_label(logo: str) -> str:
-    name = re.sub(r"^@", "", logo or "").strip() or BRAND_DEFAULT
-    if name.lower() in {"authority", "authority reels"}:
-        return "Authority Reels"
-    return name
+def _draw_centered_emphasis_line(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    *,
+    y: int,
+    canvas_w: int,
+    font: ImageFont.ImageFont,
+    accent: tuple[int, int, int],
+    default_fill: tuple[int, int, int] = PURE_WHITE,
+) -> int:
+    """Center-draw a line with optional *emphasis* segments in accent color."""
+    segments = _parse_emphasis(text)
+    plain = "".join(seg for seg, _ in segments)
+    if not plain:
+        return y
+    total_w = _text_width(plain, font)
+    left0, top0, _, bottom0 = _text_bbox(plain, font)
+    x = (canvas_w - int(total_w)) // 2
+    cursor = x
+    for seg, emph in segments:
+        if not seg:
+            continue
+        fill = accent if emph else default_fill
+        sl, st, _, _ = _text_bbox(seg, font)
+        draw.text((cursor - sl, y - top0), seg, fill=fill, font=font)
+        cursor += int(_text_width(seg, font))
+    return y + (bottom0 - top0)
+
+
+def _draw_header_box(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    *,
+    y: int,
+    canvas_w: int,
+    font: ImageFont.ImageFont,
+    accent: tuple[int, int, int],
+    scale: int,
+) -> int:
+    """Tight terracotta box behind white header, centered."""
+    plain = _clean_display(text)
+    if not plain:
+        return y
+    left, top, right, bottom = _text_bbox(plain, font)
+    tw = right - left
+    th = bottom - top
+    pad_x = HEADER_PAD_X * scale
+    pad_top = HEADER_PAD_TOP * scale
+    pad_bot = HEADER_PAD_BOTTOM * scale
+    box_w = tw + pad_x * 2
+    box_h = th + pad_top + pad_bot
+    box_x = (canvas_w - box_w) // 2
+    draw.rectangle(
+        [box_x, y, box_x + box_w, y + box_h],
+        fill=accent,
+    )
+    text_x = box_x + pad_x - left
+    text_y = y + pad_top - top
+    draw.text((text_x, text_y), plain, fill=PURE_WHITE, font=font)
+    return y + box_h
+
+
+def _circled_num(num: str) -> str:
+    n = re.sub(r"[^\d]", "", num or "")
+    if not n:
+        return ""
+    try:
+        i = int(n)
+    except ValueError:
+        return f"{n}."
+    circled = "①②③④⑤⑥⑦⑧⑨⑩"
+    if 1 <= i <= 10:
+        return circled[i - 1]
+    return f"{i}."
+
+
+def _section_header(slide: dict[str, Any]) -> str:
+    num = str(slide.get("section_number") or "").strip()
+    stitle = _clean_display(str(slide.get("section_title") or slide.get("main_title") or ""))
+    mark = _circled_num(num)
+    if mark and stitle:
+        return f"{mark} {stitle}"
+    return stitle or mark
+
+
+def _detail_lines_of(slide: dict[str, Any]) -> list[str]:
+    lines = _as_lines(slide.get("detailed_lines"), keep_emphasis=True)
+    if lines:
+        return lines
+    legacy = str(slide.get("detailed_paragraph") or "").strip()
+    if not legacy:
+        return []
+    parts = [p.strip() for p in re.split(r"(?<=[.。!?])\s+|[\n·•]", legacy) if p.strip()]
+    return [_clean_display(p, keep_emphasis=True) for p in parts][:4]
+
+
+def _body_lines_of(slide: dict[str, Any]) -> list[str]:
+    explanations = _as_lines(slide.get("explanations"), keep_emphasis=True)
+    if explanations:
+        return explanations
+    if str(slide.get("main_statement") or "").strip() or _detail_lines_of(slide):
+        out: list[str] = []
+        stmt = _clean_display(str(slide.get("main_statement") or ""), keep_emphasis=True)
+        if stmt:
+            out.append(stmt)
+        out.extend(_detail_lines_of(slide))
+        return out
+    lines = _as_lines(slide.get("main_text") or slide.get("body") or "", keep_emphasis=True)
+    if lines:
+        return lines
+    return _as_lines(slide.get("body_points") or [], keep_emphasis=True)
 
 
 def _render_cover(
@@ -465,184 +431,43 @@ def _render_cover(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """COVER – adaptive dim + lead ink; punch = centered white on cobalt box."""
+    """COVER – deep dim, no boxes, pure white centered Black type + top logo."""
     del brand_color
-    dim_alpha = _adaptive_cover_dim_alpha(base)
-    _draw_full_dim(base, alpha=dim_alpha)
+    _draw_full_dim(base, alpha=COVER_DIM_ALPHA)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
-    current_x = MARGIN_X * scale
-    max_block = int(w * COVER_BLOCK_MAX_W)
-    pad_w = COVER_PAD_X * 2 * scale
-    text_max = max_block - pad_w - 8 * scale
-
-    # Brand / tag also follow local contrast after dim
-    brand_font = _font(26 * scale, weight="medium")
-    brand_y = int(h * 0.09)
-    brand_fill = _contrast_ink_for_region(
-        base,
-        (current_x, brand_y, current_x + 420 * scale, brand_y + 40 * scale),
-    )
-    draw.text((current_x, brand_y), _brand_label(logo), font=brand_font, fill=brand_fill)
+    draw_logo(base, scale=scale, position="top", brand_name=logo)
 
     lines = _as_lines(slide.get("title_lines"))
     if not lines:
         title = _clean_display(str(slide.get("main_title") or slide.get("hook") or ""))
         lines = [title] if title else []
-    lines = [ln for ln in (_clean_display(x) for x in lines[:4]) if ln]
+    lines = [ln for ln in lines[:4] if ln]
     if not lines:
         return base
 
-    n = len(lines)
-    if n <= 1:
-        punch_from = 0
-    else:
-        punch_from = max(1, n - 2)
-
-    prepared: list[tuple[str, ImageFont.ImageFont, bool]] = []
-    for i, clean in enumerate(lines):
-        is_punch = i >= punch_from
+    max_w = int(w * 0.86)
+    prepared: list[tuple[str, ImageFont.ImageFont]] = []
+    for clean in lines:
         _, font = _fit_single_line(
             clean,
-            max_width=text_max,
-            base_size=COVER_PUNCH_BASE if is_punch else COVER_LEAD_BASE,
+            max_width=max_w,
+            base_size=COVER_TITLE_BASE,
             scale=scale,
             weight="black",
-            min_size=64 if is_punch else 52,
+            min_size=COVER_TITLE_MIN,
         )
-        prepared.append((clean, font, is_punch))
+        prepared.append((clean, font))
 
-    stack_h = 0
-    for clean, font, is_punch in prepared:
-        th = _text_height(clean, font)
-        if is_punch:
-            stack_h += th + COVER_PAD_Y * 2 * scale
-        else:
-            stack_h += th
-    stack_h += COVER_LINE_MARGIN * scale * max(0, len(prepared) - 1)
-    current_y = max(int(h * 0.28), (h - stack_h) // 2 - 40 * scale)
+    gap = int(28 * scale)
+    stack_h = sum(_text_height(t, f) for t, f in prepared) + gap * max(0, len(prepared) - 1)
+    y = max(int(h * 0.32), (h - stack_h) // 2 - 20 * scale)
 
-    for clean, font, is_punch in prepared:
-        if is_punch:
-            current_y = _draw_cover_highlight(
-                draw,
-                clean,
-                current_x=current_x,
-                current_y=current_y,
-                font=font,
-                scale=scale,
-            )
-        else:
-            current_y = _draw_cover_lead(
-                draw,
-                clean,
-                current_x=current_x,
-                current_y=current_y,
-                font=font,
-                scale=scale,
-                base=base,
-            )
-
-    tag = _clean_display(str(slide.get("category_tag") or slide.get("badge_text") or ""))
-    if tag and not tag.startswith("#"):
-        tag = f"#{tag}"
-    if tag:
-        tag_font = _font(28 * scale, weight="medium")
-        ty = h - 140 * scale
-        tag_fill = _contrast_ink_for_region(
-            base,
-            (current_x, ty - 10 * scale, current_x + 360 * scale, ty + 40 * scale),
-        )
-        draw.text((current_x, ty), tag, font=tag_font, fill=tag_fill)
-        tw = _text_width(tag, tag_font)
-        draw.line(
-            [(current_x, ty + 34 * scale), (current_x + tw, ty + 34 * scale)],
-            fill=tag_fill,
-            width=max(2, scale),
-        )
+    for clean, font in prepared:
+        y = _draw_centered_line(draw, clean, y=y, canvas_w=w, font=font, fill=PURE_WHITE)
+        y += gap
 
     return base
-
-
-def _render_content_type_a(
-    draw: ImageDraw.ImageDraw,
-    *,
-    mx: int,
-    y: int,
-    max_w: int,
-    h: int,
-    scale: int,
-    explanations: list[str],
-) -> None:
-    """Type A – punchy short lines, large Black type, pushed toward center."""
-    y = max(y, int(h * (0.40 + CONTENT_TOP_SHIFT)))
-    for line in explanations[:3]:
-        size, font = _fit_single_line(
-            line,
-            max_width=max_w,
-            base_size=CONTENT_LINE_BASE,
-            scale=scale,
-            weight="black",
-            min_size=40,
-        )
-        clean = _clean_display(line)
-        left, top, _, _ = _text_bbox(clean, font)
-        draw.text((mx - left, y - top), clean, fill=INK, font=font)
-        # Black weight needs real leading: max(bbox, font.size) + 30~40px
-        font_px = int(getattr(font, "size", size * scale) or (size * scale))
-        line_h = max(_text_height(clean, font), font_px)
-        y += line_h + CONTENT_A_LINE_GAP * scale
-        if y > h - 100 * scale:
-            break
-
-
-def _render_content_type_b(
-    draw: ImageDraw.ImageDraw,
-    *,
-    mx: int,
-    max_w: int,
-    h: int,
-    scale: int,
-    main_statement: str,
-    detailed_lines: list[str],
-) -> None:
-    """Type B – Black claim (>=90px) then Regular detail lines at 1.7x spacing."""
-    statement = _clean_display(main_statement)
-    if statement:
-        _, font = _fit_single_line(
-            statement,
-            max_width=max_w,
-            base_size=CONTENT_STATEMENT_BASE,
-            scale=scale,
-            weight="black",
-            min_size=64,
-        )
-        y = int(h * (0.30 + CONTENT_TOP_SHIFT))
-        left, top, _, _ = _text_bbox(statement, font)
-        draw.text((mx - left, y - top), statement, fill=INK, font=font)
-
-    if not detailed_lines:
-        return
-    # No textwrap: each array item is drawn as its own line
-    y = int(h * (0.45 + CONTENT_TOP_SHIFT))
-    for raw in detailed_lines[:4]:
-        line = _clean_display(raw)
-        if not line:
-            continue
-        size, font = _fit_single_line(
-            line,
-            max_width=max_w,
-            base_size=CONTENT_DETAIL_BASE,
-            scale=scale,
-            weight="regular",
-            min_size=38,
-        )
-        left, top, _, _ = _text_bbox(line, font)
-        draw.text((mx - left, y - top), line, fill=SOFT_INK, font=font)
-        # Generous 1.6~1.8x rhythm driven by nominal font size
-        y += _line_height(size, scale=scale, factor=DETAIL_LINE_FACTOR)
-        if y > h - 90 * scale:
-            break
 
 
 def _render_content(
@@ -653,74 +478,64 @@ def _render_content(
     logo: str,
     scale: int,
 ) -> Image.Image:
+    """CONTENT – solid #151515, terracotta header box, centered body + *emphasis*."""
+    accent = _hex_rgb(brand_color)
     draw = ImageDraw.Draw(base)
-    brand = _hex_rgb(brand_color)
     w, h = CARD_W * scale, CARD_H * scale
-    mx = MARGIN_X * scale
-    max_w = int(w * 0.86)
+    draw_logo(base, scale=scale, position="top", brand_name=logo)
 
-    bfont = _font(24 * scale, weight="medium")
-    blabel = _brand_label(logo)
-    bw = _text_width(blabel, bfont)
-    draw.text((w - mx - bw, int(h * 0.055)), blabel, fill=BRAND_GRAY, font=bfont)
+    header = _section_header(slide)
+    max_w = int(w * 0.88)
+    y = int(h * 0.28)
 
-    num = str(slide.get("section_number") or "").strip()
-    stitle = _clean_display(str(slide.get("section_title") or slide.get("main_title") or ""))
-    section = f"{num}. {stitle}".strip() if num else stitle
-    section = _clean_display(section)
-
-    # Section highlight, shifted down with the rest of the body block
-    y = int(h * (0.20 + CONTENT_TOP_SHIFT))
-    sec_size, sec_font = _fit_single_line(
-        section,
-        max_width=max_w - (BOX_PAD_X * 2 + 10) * scale,
-        base_size=CONTENT_SECTION_BASE,
-        scale=scale,
-        weight="bold",
-        min_size=28,
-    )
-    y = _draw_highlight_line(
-        draw,
-        section,
-        x=mx,
-        y=y,
-        font=sec_font,
-        font_size=sec_size,
-        scale=scale,
-        brand=brand,
-        after_gap=20 * scale,
-    )
-
-    if _is_content_type_b(slide):
-        _render_content_type_b(
-            draw,
-            mx=mx,
-            max_w=max_w,
-            h=h,
+    if header:
+        _, hfont = _fit_single_line(
+            header,
+            max_width=max_w - HEADER_PAD_X * 2 * scale,
+            base_size=CONTENT_HEADER_BASE,
             scale=scale,
-            main_statement=str(slide.get("main_statement") or slide.get("main_title") or ""),
-            detailed_lines=_detail_lines_of(slide),
+            weight="bold",
+            min_size=28,
         )
-        return base
+        y = _draw_header_box(
+            draw,
+            header,
+            y=y,
+            canvas_w=w,
+            font=hfont,
+            accent=accent,
+            scale=scale,
+        )
+        y += int(72 * scale)
 
-    explanations = _as_lines(slide.get("explanations"))
-    if not explanations:
-        explanations = _as_lines(slide.get("main_text") or slide.get("body") or "")
-        if not explanations:
-            explanations = _as_lines(slide.get("body_points") or [])
-    _render_content_type_a(
-        draw,
-        mx=mx,
-        y=y + 24 * scale,
-        max_w=max_w,
-        h=h,
-        scale=scale,
-        explanations=explanations,
-    )
+    body_lines = _body_lines_of(slide)[:6]
+    for raw in body_lines:
+        if not raw.strip():
+            continue
+        size, font = _fit_single_line(
+            raw,
+            max_width=max_w,
+            base_size=CONTENT_BODY_BASE,
+            scale=scale,
+            weight="bold",
+            min_size=34,
+        )
+        y = _draw_centered_emphasis_line(
+            draw,
+            raw,
+            y=y,
+            canvas_w=w,
+            font=font,
+            accent=accent,
+            default_fill=PURE_WHITE,
+        )
+        y += int(size * scale * (CONTENT_LINE_FACTOR - 1.0))
+        if y > h - 140 * scale:
+            break
     return base
 
 
-def _render_summary(
+def _render_outro(
     base: Image.Image,
     slide: dict[str, Any],
     *,
@@ -728,75 +543,70 @@ def _render_summary(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """SUMMARY – absolute 1080×1920 grid (no dynamic vertical centering)."""
+    """OUTRO – huge slightly-left title + bottom-right logo."""
+    del brand_color
     draw = ImageDraw.Draw(base)
-    brand = _hex_rgb(brand_color)
     w, h = CARD_W * scale, CARD_H * scale
-    mx = MARGIN_X * scale
 
-    bfont = _font(24 * scale, weight="medium")
-    blabel = _brand_label(logo)
-    bw = _text_width(blabel, bfont)
-    draw.text((w - mx - bw, int(h * 0.055)), blabel, fill=BRAND_GRAY, font=bfont)
+    lines = _as_lines(slide.get("title_lines"))
+    if not lines:
+        title = _clean_display(str(slide.get("main_title") or slide.get("hook") or ""))
+        if title:
+            # Break into short breath units for magazine impact
+            if len(title) > 12 and " " not in title:
+                # Hangul: split roughly into 2–3 chunks
+                chunk = max(4, len(title) // 3)
+                lines = [title[i : i + chunk] for i in range(0, len(title), chunk)][:3]
+            else:
+                lines = [p for p in re.split(r"\s+|/", title) if p][:4] or [title]
+    if not lines:
+        items = _as_lines(slide.get("summary_list") or [])
+        if items:
+            lines = ["당신의", "사수가", "되어드립니다"]
+        else:
+            lines = ["당신의", "사수가", "되어드립니다"]
 
-    title = _clean_display(str(slide.get("main_title") or slide.get("hook") or "핵심 체크 포인트"))
-    title_font = _font(SUMMARY_HEAD_BASE * scale, weight="extrabold")
-    # Title box: absolute X=120, Y=350 — same generous asymmetric padding as COVER
-    _draw_highlight_line(
-        draw,
-        title,
-        x=SUMMARY_TITLE_X * scale,
-        y=SUMMARY_TITLE_Y * scale,
-        font=title_font,
-        font_size=SUMMARY_HEAD_BASE,
-        scale=scale,
-        brand=brand,
-        pad_x=COVER_PAD_X * scale,
-        pad_top=COVER_PAD_Y * scale,
-        pad_bottom=COVER_PAD_Y * scale,
-        after_gap=0,
-    )
-
-    raw_items = _as_lines(slide.get("summary_list") or slide.get("body_points") or [])[:4]
-    items: list[str] = []
-    for item in raw_items:
-        clean = re.sub(r"^\d+[\.\)]\s*", "", item).strip()
-        clean = _clean_display(clean)
-        if clean:
-            items.append(clean)
-
-    # Fixed hanging indent: numbers X=120 / body X=220 Bold 65px
-    num_font = _font(SUMMARY_NUM_SIZE * scale, weight="bold")
-    body_font = _font(SUMMARY_ITEM_SIZE * scale, weight="extrabold")
-    body_max = w - SUMMARY_TEXT_X * scale - mx
-    for i, clean in enumerate(items):
-        y = (SUMMARY_LIST_Y0 + i * SUMMARY_LIST_STEP) * scale
-        num = f"{i + 1}."
-        n_left, n_top, _, _ = _text_bbox(num, num_font)
-        draw.text(
-            (SUMMARY_NUM_X * scale - n_left, y - n_top),
-            num,
-            fill=brand,
-            font=num_font,
-        )
-        fitted = body_font
-        if _text_width(clean, body_font) > body_max:
-            _, fitted = _fit_single_line(
-                clean,
-                max_width=body_max,
-                base_size=SUMMARY_ITEM_SIZE,
-                scale=scale,
-                weight="extrabold",
-                min_size=44,
-            )
-        b_left, b_top, _, _ = _text_bbox(clean, fitted)
-        draw.text(
-            (SUMMARY_TEXT_X * scale - b_left, y - b_top),
+    max_w = int(w * 0.78)
+    prepared: list[tuple[str, ImageFont.ImageFont]] = []
+    for clean in lines[:4]:
+        _, font = _fit_single_line(
             clean,
-            fill=SUMMARY_INK,
-            font=fitted,
+            max_width=max_w,
+            base_size=OUTRO_TITLE_BASE,
+            scale=scale,
+            weight="black",
+            min_size=64,
         )
+        prepared.append((clean, font))
 
+    gap = int(18 * scale)
+    stack_h = sum(_text_height(t, f) for t, f in prepared) + gap * max(0, len(prepared) - 1)
+    y = max(int(h * 0.30), (h - stack_h) // 2 - 80 * scale)
+    # Slightly left of center
+    left_nudge = int(w * 0.08)
+
+    for clean, font in prepared:
+        plain = _plain_from_emphasis(clean)
+        left, top, right, bottom = _text_bbox(plain, font)
+        tw = right - left
+        x = (w - tw) // 2 - left_nudge - left
+        draw.text((x, y - top), plain, fill=PURE_WHITE, font=font)
+        y += (bottom - top) + gap
+
+    sub = _clean_display(str(slide.get("category_tag") or slide.get("badge_text") or ""))
+    if not sub:
+        # Optional soft subtitle from first summary item
+        items = _as_lines(slide.get("summary_list") or [])
+        if items:
+            sub = items[0]
+    if sub:
+        sfont = _font(28 * scale, weight="medium")
+        left, top, right, bottom = _text_bbox(sub, sfont)
+        tw = right - left
+        x = (w - tw) // 2 - left_nudge - left
+        draw.text((x, y + 20 * scale - top), sub, fill=SOFT_WHITE, font=sfont)
+
+    draw_logo(base, scale=scale, position="bottom_right", brand_name=logo)
     return base
 
 
@@ -806,12 +616,12 @@ def _normalize_slide_type(slide: dict[str, Any], index: int, total: int) -> str:
         return "COVER"
     if raw in {"DETAIL", "CONTENT", "QUOTE", "BODY"}:
         return "CONTENT"
-    if raw == "SUMMARY":
-        return "SUMMARY"
+    if raw in {"SUMMARY", "OUTRO", "CTA", "ENDING"}:
+        return "OUTRO"
     if index <= 0:
         return "COVER"
     if index >= total - 1:
-        return "SUMMARY"
+        return "OUTRO"
     return "CONTENT"
 
 
@@ -820,8 +630,8 @@ def render_slide_pil(
     background: Path,
     output_path: Path,
     *,
-    brand_color: str = "#0055FF",
-    logo: str = "authority",
+    brand_color: str = DEFAULT_BRAND_COLOR,
+    logo: str = BRAND_FALLBACK,
     slide_index: int = 1,
     slide_total: int = 7,
 ) -> Path:
@@ -830,24 +640,24 @@ def render_slide_pil(
     ensure_dir(output_path.parent)
 
     slide_type = _normalize_slide_type(slide, slide_index - 1, slide_total)
+    color = brand_color or DEFAULT_BRAND_COLOR
 
     if slide_type == "COVER":
         if background.exists():
             with Image.open(background) as raw:
-                # Keep raw phone-snap look – no commercial vibrance boost
                 base = _fit_cover(raw, w, h)
         else:
-            base = Image.new("RGB", (w, h), (12, 12, 16))
-        img = _render_cover(base, slide, brand_color=brand_color, logo=logo, scale=scale)
-    elif slide_type == "SUMMARY":
-        base = Image.new("RGB", (w, h), PURE_WHITE)
-        img = _render_summary(base, slide, brand_color=brand_color, logo=logo, scale=scale)
+            base = Image.new("RGB", (w, h), BG_DARK)
+        img = _render_cover(base, slide, brand_color=color, logo=logo, scale=scale)
+    elif slide_type == "OUTRO":
+        base = Image.new("RGB", (w, h), BG_DARK)
+        img = _render_outro(base, slide, brand_color=color, logo=logo, scale=scale)
     else:
-        base = Image.new("RGB", (w, h), PURE_WHITE)  # pages 2+ pure white
-        img = _render_content(base, slide, brand_color=brand_color, logo=logo, scale=scale)
+        base = Image.new("RGB", (w, h), BG_DARK)
+        img = _render_content(base, slide, brand_color=color, logo=logo, scale=scale)
 
     img.save(output_path, format="PNG", optimize=True)
-    logger.info("PIL insight slide %d (%s) -> %s", slide_index, slide_type, output_path.name)
+    logger.info("PIL magazine slide %d (%s) -> %s", slide_index, slide_type, output_path.name)
     return output_path
 
 
@@ -856,8 +666,8 @@ def render_all_pil(
     backgrounds: list[Path],
     output_dir: Path,
     *,
-    brand_color: str = "#0055FF",
-    logo: str = "authority",
+    brand_color: str = DEFAULT_BRAND_COLOR,
+    logo: str = BRAND_FALLBACK,
 ) -> list[Path]:
     ensure_dir(output_dir)
     out: list[Path] = []
