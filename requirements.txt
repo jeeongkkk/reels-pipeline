@@ -1,0 +1,39 @@
+# Core
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# UI / QC Dashboard
+streamlit>=1.29.0
+
+# Module 1 - Research / live web facts
+feedparser>=6.0.10
+httpx>=0.26.0
+beautifulsoup4>=4.12.0
+ddgs>=9.0.0
+# Optional paid search fallback (primary: TAVILY_API_KEY in .env)
+
+# Module 2 - Script / Card planner (Gemini hooks + OpenAI planner)
+openai>=1.40.0
+anthropic>=0.40.0  # optional legacy
+
+# Module 4 - Card backgrounds (Fal.ai Flux Schnell)
+fal-client>=0.5.0
+
+# Module 3 - TTS
+edge-tts>=6.1.0
+
+# Module 5 - Assembly
+moviepy>=2.0.0,<3.0.0
+faster-whisper>=1.0.0
+numpy>=1.26.0
+Pillow>=10.0.0
+playwright>=1.40.0
+
+# Module 6 - Publish
+instagrapi>=2.0.0
+
+# Dev / POC
+pytest>=7.4.0
+pytest-asyncio>=0.23.0

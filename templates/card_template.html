@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <title>Card Slide</title>
+  <style>
+    @font-face {
+      font-family: "Pretendard";
+      src: url("{{FONT_REGULAR}}") format("opentype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "Pretendard";
+      src: url("{{FONT_SEMIBOLD}}") format("opentype");
+      font-weight: 600;
+      font-style: normal;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "Pretendard";
+      src: url("{{FONT_BOLD}}") format("opentype");
+      font-weight: 700;
+      font-style: normal;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "Pretendard";
+      src: url("{{FONT_EXTRABOLD}}") format("opentype");
+      font-weight: 800;
+      font-style: normal;
+      font-display: block;
+    }
+    @font-face {
+      font-family: "Pretendard";
+      src: url("{{FONT_BLACK}}") format("opentype");
+      font-weight: 900;
+      font-style: normal;
+      font-display: block;
+    }
+
+    :root {
+      --brand: {{BRAND_COLOR}};
+      --title: #F0F0F0;
+      --progress: {{PROGRESS_PCT}}%;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #000;
+      font-family: "Pretendard", "Malgun Gothic", sans-serif;
+      letter-spacing: -0.03em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .stage {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background-color: #050505;
+      background-image: url("{{BACKGROUND_IMAGE}}");
+      background-size: cover;
+      background-position: center center;
+      background-repeat: no-repeat;
+    }
+
+    /* Bottom 50% black gradient dim – FACTOSQUARE style */
+    .dim {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 50%;
+      background: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.92) 0%,
+        rgba(0, 0, 0, 0.72) 35%,
+        rgba(0, 0, 0, 0.28) 70%,
+        rgba(0, 0, 0, 0) 100%
+      );
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .progress-track {
+      position: absolute;
+      top: 40px;
+      left: 56px;
+      right: 56px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      overflow: hidden;
+      z-index: 8;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: var(--progress);
+      background: var(--brand);
+      border-radius: 999px;
+    }
+
+    /* Top-center Violet Echo mark */
+    .brand-mark {
+      position: absolute;
+      top: 64px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 28px;
+      height: 28px;
+      background: var(--brand);
+      border-radius: 6px;
+      z-index: 8;
+    }
+
+    .copy {
+      position: absolute;
+      left: 56px;
+      right: 56px;
+      bottom: 148px;
+      z-index: 4;
+    }
+
+    .badge {
+      display: inline-block;
+      max-width: 100%;
+      background: #ffffff;
+      color: #111111;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      padding: 10px 18px;
+      border-radius: 12px;
+      margin-bottom: 22px;
+      word-break: keep-all;
+    }
+
+    .main-title {
+      font-size: 58px;
+      font-weight: 900;
+      color: var(--title);
+      letter-spacing: -0.04em;
+      line-height: 1.28;
+      word-break: keep-all;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
+      margin-bottom: 18px;
+    }
+
+    .stage.compact-text .main-title {
+      font-size: 48px;
+      line-height: 1.3;
+    }
+
+    .body {
+      font-size: 30px;
+      font-weight: 600;
+      color: rgba(240, 240, 240, 0.88);
+      letter-spacing: -0.02em;
+      line-height: 1.45;
+      word-break: keep-all;
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    .logo {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 52px;
+      text-align: center;
+      z-index: 6;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--brand);
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage{{TITLE_MODIFIER}}">
+    <div class="progress-track"><div class="progress-fill"></div></div>
+    <div class="brand-mark"></div>
+    <div class="dim"></div>
+    <div class="copy">
+      {{LAYOUT_INNER}}
+    </div>
+    <div class="logo">{{LOGO}}</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "duration": 15.0,
+  "language": "ko",
+  "words": [
+    { "text": "B2B",       "start": 0.30,  "end": 0.70  },
+    { "text": "마케팅",     "start": 0.75,  "end": 1.30  },
+    { "text": "트렌드",     "start": 1.35,  "end": 1.90  },
+    { "text": "하나",       "start": 2.10,  "end": 2.45  },
+    { "text": "알려드릴게요", "start": 2.50,  "end": 3.40  },
+    { "text": "2026년",    "start": 3.80,  "end": 4.40  },
+    { "text": "릴스",       "start": 4.45,  "end": 4.85  },
+    { "text": "조회수",     "start": 4.90,  "end": 5.40  },
+    { "text": "70%가",     "start": 5.50,  "end": 6.00  },
+    { "text": "첫",         "start": 6.20,  "end": 6.45  },
+    { "text": "3초에서",   "start": 6.50,  "end": 7.10  },
+    { "text": "결정됩니다", "start": 7.15,  "end": 8.00  },
+    { "text": "팔로우하면", "start": 8.50,  "end": 9.30  },
+    { "text": "매주",       "start": 9.35,  "end": 9.70  },
+    { "text": "인사이트를", "start": 9.75,  "end": 10.50 },
+    { "text": "받아보세요", "start": 10.55, "end": 11.50 }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "ok": [
+    {
+      "name": "web_facts",
+      "detail": "provider=duckduckgo n=5"
+    },
+    {
+      "name": "script_count",
+      "detail": "n=8 source=groq+duckduckgo"
+    },
+    {
+      "name": "script_requires_real_entity",
+      "detail": "all_abstract=True"
+    },
+    {
+      "name": "script_fact_density",
+      "detail": "weak=0"
+    },
+    {
+      "name": "script_spam_clean",
+      "detail": ""
+    },
+    {
+      "name": "waterfall_tier",
+      "detail": "source=cache"
+    },
+    {
+      "name": "waterfall_file",
+      "detail": "slide_bg_1.png 682876B"
+    },
+    {
+      "name": "waterfall_template_1080x1920",
+      "detail": "C:\\Users\\Jeong Kyeom\\Desktop\\발구지\\reels-pipeline\\templates\\slide_bg_1.png"
+    },
+    {
+      "name": "pipeline_backgrounds",
+      "detail": "n=7 sources=['cache', 'web_photo'] placeholders=0"
+    },
+    {
+      "name": "pipeline_script",
+      "detail": "slides=7"
+    },
+    {
+      "name": "pipeline_pngs",
+      "detail": "n=7 sample=slide_01.png size=(2160, 3840)"
+    },
+    {
+      "name": "pipeline_zip",
+      "detail": "card_slides.zip 21634884B"
+    }
+  ],
+  "fail": [],
+  "info": {
+    "web_provider": "duckduckgo",
+    "web_n": 5,
+    "script_source": "groq+duckduckgo",
+    "slide_n": 8,
+    "project_dir": "C:\\Users\\Jeong Kyeom\\Desktop\\발구지\\reels-pipeline\\projects\\20260721_150435_e2e-waterfall-test",
+    "zip": "C:\\Users\\Jeong Kyeom\\Desktop\\발구지\\reels-pipeline\\projects\\20260721_150435_e2e-waterfall-test\\card_slides.zip",
+    "bg_sources": [
+      "cache",
+      "web_photo"
+    ]
+  }
+}

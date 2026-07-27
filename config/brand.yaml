@@ -1,0 +1,146 @@
+# B2B 컨설팅 / 마케팅 Authority 브랜드 가이드
+# Module 2 (대본), Module 5 (자막·비주얼)에서 참조합니다.
+
+brand:
+  name: "Authority Reels"
+  tagline: "B2B 마케팅 인사이트를 60초로"
+  industry: "B2B Marketing & Consulting"
+
+# ── 톤앤매너 ────────────────────────────────────────────────
+tone:
+  persona: "20대 후반~30대 초반, B2B 마케팅 실무 경험이 있는 인스타 크리에이터"
+  style: "친근한 구어체(해요체/해체), 말하듯 짧게"
+  formality: "casual-spoken"          # casual-spoken | semi-formal | formal
+
+  do:
+    - "핵심 팩트를 먼저 던지고 근거를 짧게 붙인다"
+    - "숫자·통계를 구체적으로 인용한다 (예: 'CTR 2.3배')"
+    - "시청자에게 직접 말 거는 2인칭 사용 (예: '여러분 팀에서도')"
+    - "해요체/해체로 호흡 있게 말한다"
+    - "마지막에 행동 유도 CTA를 넣는다"
+
+  dont:
+    - "안녕하세요~, 반갑습니다 등 기계적 인사"
+    - "오늘 알아볼 주제는~ 같은 뻔한 오프닝"
+    - "문어체 종결 (~입니다, ~합니다, ~예상됩니다, ~중요합니다)"
+    - "과장된 이모티콘·감탄사 남발"
+    - "근거 없는 단정 (예: '무조건 성공')"
+    - "경쟁사 직접 비하"
+
+# ── 대본 규칙 (Module 2 Prompt에 주입) ───────────────────────
+script:
+  target_duration_sec: 35
+  max_words: 100
+  hook_max_chars: 28
+  cta_template: "댓글에 '비밀' 남겨주시면 자료 보내드릴게요."
+
+  visual_marker_format: "[{n}. Visual: {keyword}]"
+  pause_markers:
+    - "..."
+    - "(한숨)"
+    - "(잠깐)"
+
+# ── 자막 스타일 (Module 5) ────────────────────────────────────
+caption:
+  font: "Malgun-Gothic-Bold"
+  font_size: 52
+  color: "#FFFFFF"
+  stroke_color: "#000000"
+  stroke_width: 6                    # thick stroke, no box
+  position: "bottom"
+  highlight_color: "#FFE566"         # karaoke active word
+  max_chars_per_line: 14
+  max_width_ratio: 0.86
+  safe_bottom_ratio: 0.30
+  bg_opacity: 0.0                    # trend: no caption box
+  dynamic: true                      # word highlight animation
+
+# ── 편집 페이싱 ──────────────────────────────────────────────
+edit:
+  cut_min_sec: 2.5
+  cut_max_sec: 3.5
+
+# ── 영상 스펙 ────────────────────────────────────────────────
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  format: "portrait"               # 9:16
+
+# ── BGM / SFX ────────────────────────────────────────────────
+audio:
+  bgm_volume_normal: 0.28
+  bgm_volume_ducked: 0.18
+  sfx_caption_volume: 0.35
+  sfx_transition_volume: 0.30
+  sfx:
+    caption_pop: "typing_click.mp3"
+    transition: "swish.mp3"
+
+# ── Visual 키워드 가이드 (Pexels 검색용) ─────────────────────
+visual:
+  prefer:
+    - "business meeting office"
+    - "laptop typing marketing"
+    - "team collaboration whiteboard"
+    - "office hallway walk"
+    - "coffee shop laptop work"
+    - "handshake closeup business"
+    - "marketing analytics laptop"
+  avoid:
+    - "funny"
+    - "cartoon"
+    - "party"
+    - "abstract gradient"
+    - "blank smartphone screen"
+    - "white screen"
+
+# ── Hook Scoring 가중치 (Module 1.5) ─────────────────────────
+hook_scoring:
+  weights:
+    audience_relevance: 0.30       # B2B 타겟 관련성
+    emotional_trigger: 0.25        # 놀람·공감·긴급성
+    clarity: 0.20                  # 3초 내 이해도
+    novelty: 0.15                  # 신선함
+    risk: -0.10                    # 논란·저작권·허위 위험
+  min_score_to_proceed: 70         # 이 점수 미만이면 제작 보류
+
+# ── Reference defaults (Stage [0]) ───────────────────────────
+reference:
+  follow_points_default:
+    - hook
+    - caption
+    - tone
+  style_notes_placeholder: >
+    예: 문장 단위 자막, 하단 배치, 첫 1초 강한 훅,
+    컷 2~3초, 과장 없이 팩트 중심
+  # Local sample files live under config/references/
+  local_dir: "./config/references"
+
+# ── Production modes (Phase B) ───────────────────────────────
+production:
+  default_mode: "card_news"   # card_news | voice_tts | music_caption
+  modes:
+    card_news:
+      label: "카드뉴스 PNG (하이엔드)"
+      description: "Pretendard + 레티나 PNG(2160×3840) + ZIP 다운로드"
+      needs_tts: false
+    voice_tts:
+      label: "대본 + TTS (나레이션)"
+      description: "훅/본문/CTA 대본을 만들고 Edge-TTS로 음성 합성"
+      needs_tts: true
+    music_caption:
+      label: "음악 + 자막만"
+      description: "보이스 없이 BGM + 화면 자막 카드로 구성"
+      needs_tts: false
+  music_caption_target_sec: 20
+
+# ── Card news (B2B high-end PNG) ─────────────────────────────
+card_news:
+  brand_color: "#876E9B"       # Violet Echo
+  highlight_mode: "color"      # color | box
+  font_family: "Pretendard"
+  slides_min: 6
+  slides_max: 8
+  device_scale_factor: 2       # 1080×1920 viewport → 2160×3840 PNG
+  output: "png_zip"            # MoviePy removed from card path

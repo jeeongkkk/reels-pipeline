@@ -1,0 +1,15 @@
+.env
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+projects/*/
+!projects/.gitkeep
+!projects/poc_output/.gitkeep
+config/instagram_session.json
+*.mp3
+*.mp4
+!fixtures/sample_timestamps.json
+.DS_Store
