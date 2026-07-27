@@ -8,13 +8,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from modules.assembly import TimedText, assemble_music_caption_reel, assemble_voice_reel
-from modules.assets import fetch_assets_for_markers
 from modules.modes import ProductionMode, parse_mode
 from modules.project import StrategicInput, create_project, save_json
 from modules.reference import ReferenceInput
-from modules.script import generate_script
-from modules.tts import run_tts_for_mode
 from modules.utils import ROOT_DIR, ensure_dir, get_logger, load_brand_config
 
 logger = get_logger(__name__)
@@ -53,7 +49,7 @@ async def render_project(
     project_dir: Path | None = None,
     on_progress: ProgressFn | None = None,
     use_tts: bool = True,
-    brand_color: str = "#0055FF",
+    brand_color: str = "#DD5138",
     highlight_mode: str = "color",
     draft_mode: bool = False,
     make_video: bool = False,
@@ -90,6 +86,12 @@ async def render_project(
             make_video=make_video,
             on_progress=on_progress,
         )
+
+    # Video modes only – keep moviepy/whisper lazy so Streamlit Cloud card-news works
+    from modules.assembly import TimedText, assemble_music_caption_reel, assemble_voice_reel
+    from modules.assets import fetch_assets_for_markers
+    from modules.script import generate_script
+    from modules.tts import run_tts_for_mode
 
     _emit(on_progress, 42, "Claude 대본/자막 생성 중...")
     script = await generate_script(
