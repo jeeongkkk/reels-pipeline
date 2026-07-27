@@ -27,16 +27,18 @@ MARGIN_X = 80
 BRAND_FALLBACK = "WITH CHOYOOL"
 DEFAULT_BRAND_COLOR = "#DD5138"
 
-COVER_DIM_ALPHA = 0.62  # legacy; cover now uses top linear gradient
-COVER_GRAD_TOP_ALPHA = 220
-COVER_GRAD_FADE_RATIO = 0.55  # top 55% fades to transparent
-COVER_TEXT_Y_RATIO = 0.34  # place title in dense gradient band (30~40%)
-COVER_TITLE_BASE = 84
-COVER_PUNCH_BASE = 108  # last line bigger – scroll stop
-COVER_TITLE_MIN = 52
-COVER_PUNCH_MIN = 68
+COVER_DIM_ALPHA = 0.62  # legacy
+COVER_GRAD_TOP_ALPHA = 220  # legacy top-down
+COVER_GRAD_BOTTOM_ALPHA = 235
+COVER_GRAD_SOLID_RATIO = 0.24  # solid black band at bottom
+COVER_GRAD_FADE_RATIO = 0.30  # soft fade upward into photo
+COVER_TEXT_Y_RATIO = 0.58  # headline sits in dark lower band
+COVER_TITLE_BASE = 78
+COVER_PUNCH_BASE = 96
+COVER_TITLE_MIN = 48
+COVER_PUNCH_MIN = 60
 CONTENT_HEADER_BASE = 42
-CONTENT_BODY_BASE = 62  # ~20% larger than prior 52
+CONTENT_BODY_BASE = 62
 CONTENT_LINE_FACTOR = 1.85
 SUMMARY_TITLE_BASE = 52
 SUMMARY_ITEM_BASE = 48
@@ -45,11 +47,13 @@ OUTRO_TITLE_BASE = 110
 HEADER_PAD_X = 22
 HEADER_PAD_TOP = 12
 HEADER_PAD_BOTTOM = 16
-LOGO_TOP_Y = 120  # logical px
-LOGO_MAX_W = 280
-LOGO_MAX_H = 160
+LOGO_TOP_Y = 110
+LOGO_MAX_W = 260
+LOGO_MAX_H = 150
 
 FONTS_DIR = ROOT_DIR / "assets" / "fonts" / "Pretendard"
+PAPERLOGY_DIR = ROOT_DIR / "assets" / "fonts" / "Paperlogy"
+FREESENT_DIR = ROOT_DIR / "assets" / "fonts" / "Freesentation"
 WIN_FONTS = Path("C:/Windows/Fonts")
 LOGO_CANDIDATES = (
     ROOT_DIR / "logo.png",
@@ -58,15 +62,21 @@ LOGO_CANDIDATES = (
 
 
 def _resolve_font(name: str) -> Path | None:
-    cand = FONTS_DIR / name
-    if cand.exists() and cand.stat().st_size > 1000:
-        return cand
+    for folder in (FONTS_DIR, PAPERLOGY_DIR, FREESENT_DIR):
+        cand = folder / name
+        if cand.exists() and cand.stat().st_size > 1000:
+            return cand
     mapping = {
         "Pretendard-Regular.otf": ("malgun.ttf", "arial.ttf"),
         "Pretendard-Medium.otf": ("malgun.ttf", "arial.ttf"),
         "Pretendard-Bold.otf": ("malgunbd.ttf", "arialbd.ttf"),
         "Pretendard-ExtraBold.otf": ("malgunbd.ttf", "arialbd.ttf"),
         "Pretendard-Black.otf": ("malgunbd.ttf", "arialbd.ttf"),
+        "Paperlogy-8ExtraBold.ttf": ("malgunbd.ttf", "arialbd.ttf"),
+        "Paperlogy-9Black.ttf": ("malgunbd.ttf", "arialbd.ttf"),
+        "Paperlogy-7Bold.ttf": ("malgunbd.ttf", "arialbd.ttf"),
+        "Freesentation-8ExtraBold.ttf": ("malgunbd.ttf", "arialbd.ttf"),
+        "Freesentation-9Black.ttf": ("malgunbd.ttf", "arialbd.ttf"),
     }
     for sys_name in mapping.get(name, ("malgunbd.ttf", "malgun.ttf")):
         p = WIN_FONTS / sys_name
@@ -75,15 +85,29 @@ def _resolve_font(name: str) -> Path | None:
     return None
 
 
-def _font(size: int, *, weight: str = "bold") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+def _font(
+    size: int,
+    *,
+    weight: str = "bold",
+    family: str = "pretendard",
+) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     size = max(12, int(size))
-    order = {
-        "regular": ["Pretendard-Regular.otf"],
-        "medium": ["Pretendard-Medium.otf", "Pretendard-Regular.otf"],
-        "bold": ["Pretendard-Bold.otf", "Pretendard-ExtraBold.otf", "Pretendard-Black.otf"],
-        "extrabold": ["Pretendard-ExtraBold.otf", "Pretendard-Black.otf", "Pretendard-Bold.otf"],
-        "black": ["Pretendard-Black.otf", "Pretendard-ExtraBold.otf", "Pretendard-Bold.otf"],
-    }.get(weight, ["Pretendard-Bold.otf"])
+    if family == "paperlogy":
+        order = {
+            "regular": ["Paperlogy-4Regular.ttf", "Pretendard-Regular.otf"],
+            "medium": ["Paperlogy-5Medium.ttf", "Pretendard-Medium.otf"],
+            "bold": ["Paperlogy-7Bold.ttf", "Paperlogy-8ExtraBold.ttf", "Pretendard-Bold.otf"],
+            "extrabold": ["Paperlogy-8ExtraBold.ttf", "Paperlogy-9Black.ttf", "Pretendard-ExtraBold.otf"],
+            "black": ["Paperlogy-9Black.ttf", "Paperlogy-8ExtraBold.ttf", "Pretendard-Black.otf"],
+        }.get(weight, ["Paperlogy-8ExtraBold.ttf"])
+    else:
+        order = {
+            "regular": ["Pretendard-Regular.otf"],
+            "medium": ["Pretendard-Medium.otf", "Pretendard-Regular.otf"],
+            "bold": ["Pretendard-Bold.otf", "Pretendard-ExtraBold.otf", "Pretendard-Black.otf"],
+            "extrabold": ["Pretendard-ExtraBold.otf", "Pretendard-Black.otf", "Pretendard-Bold.otf"],
+            "black": ["Pretendard-Black.otf", "Pretendard-ExtraBold.otf", "Pretendard-Bold.otf"],
+        }.get(weight, ["Pretendard-Bold.otf"])
     for fname in order:
         path = _resolve_font(fname)
         if path:
@@ -143,21 +167,83 @@ def _as_lines(raw: Any, *, keep_emphasis: bool = False) -> list[str]:
     return []
 
 
+def _sanitize_emphasis_marks(text: str) -> str:
+    """Drop awkward *spans* (particles / 1-char) before drawing."""
+    bad_alone = {
+        "에",
+        "을",
+        "를",
+        "이",
+        "가",
+        "은",
+        "는",
+        "의",
+        "과",
+        "와",
+        "시",
+        "로",
+        "으로",
+        "기업",
+        "개발에",
+        "신청 시",
+        "신청시",
+    }
+
+    def repl(m: re.Match[str]) -> str:
+        inner = (m.group(1) or "").strip()
+        if not inner or inner in bad_alone or len(inner) <= 1:
+            return inner
+        if re.fullmatch(r"[은는이가을를의과와에도만]+", inner):
+            return inner
+        return f"*{inner}*"
+
+    return re.sub(r"\*([^*]+)\*", repl, text or "")
+
+
 def _parse_emphasis(text: str) -> list[tuple[str, bool]]:
     """Split on '*' – even index = normal, odd index = accent."""
-    parts = (text or "").split("*")
+    raw = _sanitize_emphasis_marks(text or "")
+    parts = raw.split("*")
     out: list[tuple[str, bool]] = []
     for i, part in enumerate(parts):
         if not part:
             continue
         out.append((part, i % 2 == 1))
     if not out:
-        return [((text or "").replace("*", ""), False)]
+        return [(raw.replace("*", ""), False)]
     return out
 
 
 def _plain_from_emphasis(text: str) -> str:
-    return (text or "").replace("*", "")
+    return _sanitize_emphasis_marks(text or "").replace("*", "")
+
+
+def _draw_centered_emphasis_line(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    *,
+    y: int,
+    canvas_w: int,
+    font: ImageFont.ImageFont,
+    accent: tuple[int, int, int],
+    default_fill: tuple[int, int, int] = PURE_WHITE,
+) -> int:
+    """'*' split highlight: odd parts accent; advance X by font.getlength()."""
+    text = _sanitize_emphasis_marks(text)
+    plain = _plain_from_emphasis(text)
+    if not plain.strip():
+        return y
+    parts = text.split("*")
+    total_w = int(_text_width(plain, font))
+    _, top0, _, bottom0 = _text_bbox(plain, font)
+    current_x = (canvas_w - total_w) // 2
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        fill = accent if (i % 2 == 1) else default_fill
+        draw.text((current_x, y - top0), part, fill=fill, font=font)
+        current_x += int(_text_width(part, font))
+    return y + (bottom0 - top0)
 
 
 def _fit_single_line(
@@ -168,15 +254,16 @@ def _fit_single_line(
     scale: int,
     weight: str = "black",
     min_size: int = 28,
+    family: str = "pretendard",
 ) -> tuple[int, ImageFont.ImageFont]:
     plain = _plain_from_emphasis(text)
     size = base_size
     while size >= min_size:
-        font = _font(size * scale, weight=weight)
+        font = _font(size * scale, weight=weight, family=family)
         if _text_width(plain, font) <= max_width:
             return size, font
         size -= 2
-    return min_size, _font(min_size * scale, weight=weight)
+    return min_size, _font(min_size * scale, weight=weight, family=family)
 
 
 def _hex_rgb(color: str) -> tuple[int, int, int]:
@@ -213,9 +300,9 @@ def _apply_top_linear_gradient(
     base: Image.Image,
     *,
     top_alpha: int = COVER_GRAD_TOP_ALPHA,
-    fade_ratio: float = COVER_GRAD_FADE_RATIO,
+    fade_ratio: float = 0.55,
 ) -> None:
-    """Black linear gradient: opaque at top → transparent mid/lower (keeps subject)."""
+    """Legacy top-down gradient (kept for optional use)."""
     w, h = base.size
     fade_h = max(1, int(h * max(0.35, min(0.7, fade_ratio))))
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -227,6 +314,41 @@ def _apply_top_linear_gradient(
         if a <= 0:
             continue
         draw.line([(0, y), (w, y)], fill=(0, 0, 0, a))
+    composited = Image.alpha_composite(base.convert("RGBA"), overlay)
+    base.paste(composited.convert("RGB"))
+
+
+def _apply_bottom_linear_gradient(
+    base: Image.Image,
+    *,
+    bottom_alpha: int = COVER_GRAD_BOTTOM_ALPHA,
+    solid_ratio: float = COVER_GRAD_SOLID_RATIO,
+    fade_ratio: float = COVER_GRAD_FADE_RATIO,
+) -> None:
+    """Young Boss style: solid black bottom → soft fade upward (photo stays clear on top)."""
+    w, h = base.size
+    solid_h = max(1, int(h * max(0.15, min(0.45, solid_ratio))))
+    fade_h = max(1, int(h * max(0.15, min(0.5, fade_ratio))))
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    bot_a = max(0, min(255, int(bottom_alpha)))
+
+    # Solid black footer
+    for y in range(h - solid_h, h):
+        draw.line([(0, y), (w, y)], fill=(0, 0, 0, bot_a))
+
+    # Fade upward from solid edge
+    for i in range(fade_h):
+        # i=0 near photo (transparent), i=fade_h-1 near solid (opaque)
+        y = h - solid_h - fade_h + i
+        if y < 0 or y >= h:
+            continue
+        t = i / max(fade_h - 1, 1)
+        a = int(bot_a * t)
+        if a <= 0:
+            continue
+        draw.line([(0, y), (w, y)], fill=(0, 0, 0, a))
+
     composited = Image.alpha_composite(base.convert("RGBA"), overlay)
     base.paste(composited.convert("RGB"))
 
@@ -326,33 +448,6 @@ def _draw_centered_line(
     return y + (bottom - top)
 
 
-def _draw_centered_emphasis_line(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    *,
-    y: int,
-    canvas_w: int,
-    font: ImageFont.ImageFont,
-    accent: tuple[int, int, int],
-    default_fill: tuple[int, int, int] = PURE_WHITE,
-) -> int:
-    """'*' split highlight: odd parts accent; advance X by font.getlength()."""
-    plain = _plain_from_emphasis(text)
-    if not plain.strip():
-        return y
-    parts = (text or "").split("*")
-    total_w = int(_text_width(plain, font))
-    _, top0, _, bottom0 = _text_bbox(plain, font)
-    current_x = (canvas_w - total_w) // 2
-    for i, part in enumerate(parts):
-        if not part:
-            continue
-        fill = accent if (i % 2 == 1) else default_fill
-        draw.text((current_x, y - top0), part, fill=fill, font=font)
-        current_x += int(_text_width(part, font))
-    return y + (bottom0 - top0)
-
-
 def _draw_header_box(
     draw: ImageDraw.ImageDraw,
     text: str,
@@ -445,9 +540,9 @@ def _render_cover(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """COVER – top linear gradient (not full dim), white title in upper band."""
+    """COVER – bottom black + upward fade; Paperlogy headline in lower band."""
     del brand_color
-    _apply_top_linear_gradient(base)
+    _apply_bottom_linear_gradient(base)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
     draw_logo(base, scale=scale, position="top", brand_name=logo)
@@ -460,7 +555,7 @@ def _render_cover(
     if not lines:
         return base
 
-    max_w = int(w * 0.86)
+    max_w = int(w * 0.88)
     prepared: list[tuple[str, ImageFont.ImageFont]] = []
     n = len(lines)
     for i, clean in enumerate(lines):
@@ -472,12 +567,18 @@ def _render_cover(
             scale=scale,
             weight="black",
             min_size=COVER_PUNCH_MIN if is_punch else COVER_TITLE_MIN,
+            family="paperlogy",
         )
         prepared.append((clean, font))
 
-    gap = int(26 * scale)
-    # Anchor in gradient-dense zone (30~40% from top)
+    gap = int(22 * scale)
+    stack_h = sum(_text_height(t, f) for t, f in prepared) + gap * max(0, len(prepared) - 1)
+    # Sit inside the dark lower band (Young Boss / hospital-cover style)
     y = int(h * COVER_TEXT_Y_RATIO)
+    # Keep block from overflowing bottom margin
+    max_bottom = h - 120 * scale
+    if y + stack_h > max_bottom:
+        y = max(int(h * 0.50), max_bottom - stack_h)
 
     for clean, font in prepared:
         y = _draw_centered_line(draw, clean, y=y, canvas_w=w, font=font, fill=PURE_WHITE)

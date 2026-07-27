@@ -92,24 +92,69 @@ def _punch_up_cover_lines(topic: str, hook: str, lines: list[str]) -> list[str]:
 
 
 def _ensure_star_emphasis(lines: list[str]) -> list[str]:
-    """Guarantee at least one *emphasis* span for terracotta highlight rendering."""
-    out = [str(x) for x in lines if str(x).strip()]
+    """Only emphasize strong tokens. Never mid-word / particle wraps (억지 강조 금지)."""
+    out = [_sanitize_emphasis_marks(str(x)) for x in lines if str(x).strip()]
     if not out:
         return out
     if any("*" in x for x in out):
         return out
-    # Wrap a numeric / keyword token in the last line
-    last = out[-1]
-    m = re.search(r"(\d+(?:\.\d+)?(?:%|억|조|만|원)?|D-\d+|마감|필수|금지)", last)
-    if m:
-        token = m.group(1)
-        out[-1] = last.replace(token, f"*{token}*", 1)
-        return out
-    # Fallback: wrap middle 2~6 chars
-    if len(last) >= 4:
-        mid = last[len(last) // 4 : len(last) // 4 + max(2, len(last) // 3)]
-        out[-1] = last.replace(mid, f"*{mid}*", 1)
+    # Prefer a line that already has a strong numeric claim
+    for i in range(len(out) - 1, -1, -1):
+        m = re.search(
+            r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:억|조|만|원|%)|\d+(?:\.\d+)?(?:억|조|만|%|원)|D-\d+)",
+            out[i],
+        )
+        if m:
+            token = m.group(1)
+            out[i] = out[i].replace(token, f"*{token}*", 1)
+            return out
+    # Whole-word only (never substrings inside other Hangul words)
+    for i in range(len(out) - 1, -1, -1):
+        m = re.search(r"(?<![가-힣A-Za-z0-9])(필수|금지|최대|전액|즉시)(?![가-힣A-Za-z0-9])", out[i])
+        if m:
+            token = m.group(1)
+            out[i] = out[i].replace(token, f"*{token}*", 1)
+            return out
+    # No safe token → leave plain white (better than fake highlight)
     return out
+
+
+def _sanitize_emphasis_marks(text: str) -> str:
+    """Drop forced/awkward *spans* like particles or 1~2 char scraps."""
+    bad_alone = {
+        "에",
+        "을",
+        "를",
+        "이",
+        "가",
+        "은",
+        "는",
+        "의",
+        "과",
+        "와",
+        "시",
+        "로",
+        "으로",
+        "기업",
+        "개발에",
+        "신청 시",
+        "신청시",
+    }
+
+    def repl(m: re.Match[str]) -> str:
+        inner = (m.group(1) or "").strip()
+        if not inner:
+            return ""
+        if inner in bad_alone:
+            return inner
+        if len(inner) <= 1:
+            return inner
+        # Particle-only tails
+        if re.fullmatch(r"[은는이가을를의과와에도만]+", inner):
+            return inner
+        return f"*{inner}*"
+
+    return re.sub(r"\*([^*]+)\*", repl, text or "")
 
 _DEFAULT_COVER_IMAGE_PROMPT = (
     "messy real desk with crumpled receipts, iced coffee cup, open laptop half out of frame, "
