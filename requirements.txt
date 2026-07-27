@@ -1,28 +1,15 @@
-# Streamlit Community Cloud / card-news core
+# Streamlit Community Cloud — minimal card-news deps
 python-dotenv>=1.0.0
 pyyaml>=6.0.1
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 streamlit>=1.29.0
-
-# Research / web facts
 feedparser>=6.0.10
 httpx>=0.26.0
 beautifulsoup4>=4.12.0
 ddgs>=9.0.0
-
-# LLM / images
 openai>=1.40.0
-anthropic>=0.40.0
 fal-client>=0.5.0
-
-# Render
 numpy>=1.26.0
 Pillow>=10.0.0
-
-# Optional TTS (lazy-imported)
 edge-tts>=6.1.0
-
-# NOTE: moviepy / faster-whisper / playwright / instagrapi
-# are intentionally omitted for Streamlit Cloud (too heavy / fail install).
-# Local video pipeline: pip install moviepy faster-whisper playwright instagrapi
