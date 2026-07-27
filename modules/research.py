@@ -127,18 +127,60 @@ def _topic_news_queries(topic: str) -> list[str]:
     return queries[:6]
 
 
-def google_news_search_url(topic: str) -> str:
-    q = quote_plus(topic.strip())
+def google_news_search_url(topic: str, *, days: int | None = None) -> str:
+    """Google News RSS. When ``days`` is set, append ``when:Nd`` for recency."""
+    topic = topic.strip()
+    if days is not None and int(days) > 0:
+        topic = f"{topic} when:{int(days)}d"
+    q = quote_plus(topic)
     return f"https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
+
+
+def _freshness_window_days() -> int:
+    return max(1, int(get_settings().tavily_days or 7))
+
+
+def _parse_published_age_days(article: dict[str, Any]) -> float | None:
+    """Return age in days from published field, or None if unknown."""
+    from email.utils import parsedate_to_datetime
+
+    raw = str(article.get("published") or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = parsedate_to_datetime(raw)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+    except Exception:  # noqa: BLE001
+        pass
+    m = re.search(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", raw)
+    if m:
+        try:
+            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+        except ValueError:
+            return None
+    return None
+
+
+def _is_within_freshness_window(article: dict[str, Any], *, days: int | None = None) -> bool:
+    """True if published within window, or date unknown (keep; score will soft-penalize)."""
+    window = max(1, int(days if days is not None else _freshness_window_days()))
+    age = _parse_published_age_days(article)
+    if age is None:
+        return True
+    return age <= window
 
 
 def resolve_feed_urls(topic: str, extra_feeds: list[str] | None = None) -> list[str]:
     """Build feed list: several topic Google News queries + configured defaults."""
     settings = get_settings()
+    days = _freshness_window_days()
     feeds: list[str] = []
 
     for q in _topic_news_queries(topic):
-        feeds.append(google_news_search_url(q))
+        feeds.append(google_news_search_url(q, days=days))
 
     env_feeds = [u.strip() for u in (settings.news_rss_feeds or "").split(",") if u.strip()]
     feeds.extend(env_feeds or DEFAULT_FEEDS)
@@ -202,6 +244,19 @@ def _score_relevance(article: dict[str, Any], tokens: list[str], topic: str = ""
         score += 0.15
     elif years and max(years) <= CURRENT_YEAR - 2:
         score *= 0.25
+
+    # Hard recency vs TAVILY_DAYS window (default 7)
+    age = _parse_published_age_days(article)
+    window = _freshness_window_days()
+    if age is not None:
+        if age > window:
+            return 0.0
+        if age <= 2:
+            score += 0.25
+        elif age <= window:
+            score += 0.12
+    else:
+        score *= 0.92
 
     return score
 
@@ -355,6 +410,19 @@ async def research_topic(
 
     tokens = _tokenize(topic)
     articles = _dedupe_articles(articles)
+    window = _freshness_window_days()
+    before = len(articles)
+    # Prefer articles inside TAVILY_DAYS window when publish dates exist
+    recent = [a for a in articles if _is_within_freshness_window(a, days=window)]
+    if len(recent) >= 4:
+        articles = recent
+    logger.info(
+        "Research freshness window=%dd articles=%d→%d",
+        window,
+        before,
+        len(articles),
+    )
+
     # Drop obvious blog spam unless we have almost nothing left
     filtered = [a for a in articles if not _is_low_quality_article(a)]
     if len(filtered) >= 5:

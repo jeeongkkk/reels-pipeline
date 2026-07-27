@@ -10,7 +10,6 @@ import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
-from urllib.parse import quote_plus
 
 from modules.research import (
     _dedupe_articles,
@@ -261,7 +260,7 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
     if years and max(years) < CURRENT_YEAR - 1:
         score -= 2.0
 
-    # Hard recency: prefer last 7 days, soft-penalize older
+    # Hard recency: prefer last N days (TAVILY_DAYS, default 7), drop older
     age = _parse_published_age_days(article)
     settings = get_settings()
     window = max(1, int(settings.tavily_days or 7))
@@ -270,7 +269,7 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
             return -1.0  # outside recent window
         if age <= 2:
             score += 2.0
-        elif age <= 7:
+        elif age <= window:
             score += 1.2
         else:
             score += 0.3
@@ -292,11 +291,12 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
 
 
 def _category_feed_urls(category: TopicCategory) -> list[str]:
-    feeds = [google_news_search_url(q) for q in category.search_queries]
-    # Topical KR news + category keyword
+    settings = get_settings()
+    days = max(1, int(settings.tavily_days or 7))
+    feeds = [google_news_search_url(q, days=days) for q in category.search_queries]
+    # Topical KR news + category keyword (also within freshness window)
     feeds.append(
-        f"https://news.google.com/rss/search?q={quote_plus(category.label.split('·')[0].strip())}"
-        f"&hl=ko&gl=KR&ceid=KR:ko"
+        google_news_search_url(category.label.split("·")[0].strip(), days=days)
     )
     seen: set[str] = set()
     out: list[str] = []
@@ -314,6 +314,7 @@ async def _tavily_boost(category: TopicCategory, limit: int = 6) -> list[dict[st
     if not key or key.startswith("your_"):
         return []
 
+    days = max(1, int(settings.tavily_days or 7))
     try:
         import httpx
 
@@ -327,7 +328,8 @@ async def _tavily_boost(category: TopicCategory, limit: int = 6) -> list[dict[st
                     "search_depth": "basic",
                     "include_answer": False,
                     "max_results": limit,
-                    "days": int(settings.tavily_days or 30),
+                    "topic": "news",
+                    "days": days,
                 },
             )
             if resp.status_code >= 400:

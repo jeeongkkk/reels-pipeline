@@ -29,14 +29,16 @@ DEFAULT_BRAND_COLOR = "#DD5138"
 
 COVER_DIM_ALPHA = 0.62  # legacy
 COVER_GRAD_TOP_ALPHA = 220  # legacy top-down
-COVER_GRAD_BOTTOM_ALPHA = 235
-COVER_GRAD_SOLID_RATIO = 0.24  # solid black band at bottom
-COVER_GRAD_FADE_RATIO = 0.30  # soft fade upward into photo
-COVER_TEXT_Y_RATIO = 0.58  # headline sits in dark lower band
-COVER_TITLE_BASE = 78
-COVER_PUNCH_BASE = 96
-COVER_TITLE_MIN = 48
-COVER_PUNCH_MIN = 60
+COVER_GRAD_BOTTOM_ALPHA = 240
+COVER_GRAD_SOLID_RATIO = 0.22  # solid black band at bottom
+COVER_GRAD_FADE_RATIO = 0.32  # soft fade upward into photo
+COVER_TEXT_Y_RATIO = 0.62  # headline block starts in lower band
+COVER_TITLE_BASE = 72  # all cover lines same size
+COVER_TITLE_MIN = 44
+COVER_LEFT_RATIO = 0.08  # left margin (~hospital-cover style)
+COVER_MAX_W_RATIO = 0.84
+COVER_LINE_GAP = 18
+COVER_BOTTOM_MARGIN = 140
 CONTENT_HEADER_BASE = 42
 CONTENT_BODY_BASE = 62
 CONTENT_LINE_FACTOR = 1.85
@@ -448,6 +450,44 @@ def _draw_centered_line(
     return y + (bottom - top)
 
 
+def _draw_left_line(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    *,
+    y: int,
+    x: int,
+    font: ImageFont.ImageFont,
+    fill: tuple[int, int, int] = PURE_WHITE,
+) -> int:
+    """Draw one plain left-aligned line; return Y after glyph height."""
+    plain = _plain_from_emphasis(text)
+    if not plain:
+        return y
+    left, top, _, bottom = _text_bbox(plain, font)
+    draw.text((x - left, y - top), plain, fill=fill, font=font)
+    return y + (bottom - top)
+
+
+def _fit_uniform_lines(
+    lines: list[str],
+    *,
+    max_width: int,
+    base_size: int,
+    scale: int,
+    weight: str = "extrabold",
+    min_size: int = 44,
+    family: str = "paperlogy",
+) -> tuple[int, ImageFont.ImageFont]:
+    """Largest single size that fits every line within max_width."""
+    size = base_size
+    while size >= min_size:
+        font = _font(size * scale, weight=weight, family=family)
+        if all(_text_width(_plain_from_emphasis(ln), font) <= max_width for ln in lines):
+            return size, font
+        size -= 2
+    return min_size, _font(min_size * scale, weight=weight, family=family)
+
+
 def _draw_header_box(
     draw: ImageDraw.ImageDraw,
     text: str,
@@ -540,7 +580,7 @@ def _render_cover(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """COVER – bottom black + upward fade; Paperlogy headline in lower band."""
+    """COVER – bottom black↑fade; same-size left-aligned headline in lower band."""
     del brand_color
     _apply_bottom_linear_gradient(base)
     draw = ImageDraw.Draw(base)
@@ -555,33 +595,29 @@ def _render_cover(
     if not lines:
         return base
 
-    max_w = int(w * 0.88)
-    prepared: list[tuple[str, ImageFont.ImageFont]] = []
-    n = len(lines)
-    for i, clean in enumerate(lines):
-        is_punch = i == n - 1 and n >= 2
-        _, font = _fit_single_line(
-            clean,
-            max_width=max_w,
-            base_size=COVER_PUNCH_BASE if is_punch else COVER_TITLE_BASE,
-            scale=scale,
-            weight="black",
-            min_size=COVER_PUNCH_MIN if is_punch else COVER_TITLE_MIN,
-            family="paperlogy",
-        )
-        prepared.append((clean, font))
+    max_w = int(w * COVER_MAX_W_RATIO)
+    left_x = int(w * COVER_LEFT_RATIO)
+    _, font = _fit_uniform_lines(
+        lines,
+        max_width=max_w,
+        base_size=COVER_TITLE_BASE,
+        scale=scale,
+        weight="extrabold",
+        min_size=COVER_TITLE_MIN,
+        family="paperlogy",
+    )
 
-    gap = int(22 * scale)
-    stack_h = sum(_text_height(t, f) for t, f in prepared) + gap * max(0, len(prepared) - 1)
-    # Sit inside the dark lower band (Young Boss / hospital-cover style)
-    y = int(h * COVER_TEXT_Y_RATIO)
-    # Keep block from overflowing bottom margin
-    max_bottom = h - 120 * scale
-    if y + stack_h > max_bottom:
-        y = max(int(h * 0.50), max_bottom - stack_h)
+    gap = int(COVER_LINE_GAP * scale)
+    stack_h = sum(_text_height(t, font) for t in lines) + gap * max(0, len(lines) - 1)
+    # Anchor block near bottom (hospital-cover / Success_Growreader style)
+    max_bottom = h - COVER_BOTTOM_MARGIN * scale
+    y = max_bottom - stack_h
+    min_y = int(h * COVER_TEXT_Y_RATIO)
+    if y < min_y:
+        y = min_y
 
-    for clean, font in prepared:
-        y = _draw_centered_line(draw, clean, y=y, canvas_w=w, font=font, fill=PURE_WHITE)
+    for clean in lines:
+        y = _draw_left_line(draw, clean, y=y, x=left_x, font=font, fill=PURE_WHITE)
         y += gap
 
     return base

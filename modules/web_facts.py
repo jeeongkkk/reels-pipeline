@@ -260,11 +260,20 @@ async def _search_tavily(
     return out[:limit], used_queries
 
 
-async def _search_serpapi(topic: str, limit: int = 5) -> list[WebFact]:
+async def _search_serpapi(topic: str, limit: int = 5, *, days: int = 7) -> list[WebFact]:
     settings = get_settings()
     key = (getattr(settings, "serpapi_api_key", "") or "").strip()
     if not key or key.startswith("your_"):
         return []
+
+    # Map freshness window → Google tbs (past day / week / month)
+    d = max(1, int(days))
+    if d <= 1:
+        tbs = "qdr:d"
+    elif d <= 7:
+        tbs = "qdr:w"
+    else:
+        tbs = "qdr:m"
 
     params = {
         "engine": "google",
@@ -274,6 +283,7 @@ async def _search_serpapi(topic: str, limit: int = 5) -> list[WebFact]:
         "gl": "kr",
         "num": limit,
         "tbm": "nws",
+        "tbs": tbs,
     }
     async with httpx.AsyncClient(timeout=40.0) as client:
         resp = await client.get("https://serpapi.com/search.json", params=params)
@@ -385,7 +395,9 @@ async def fetch_live_web_facts(
                     topic, limit=max(limit + 2, 5), days=tavily_days
                 )
             elif kind == "serpapi":
-                rows = await _search_serpapi(topic, limit=max(limit + 2, 5))
+                rows = await _search_serpapi(
+                    topic, limit=max(limit + 2, 5), days=tavily_days
+                )
             else:
                 rows = await _search_duckduckgo(topic, limit=max(limit + 2, 5))
         except Exception as exc:  # noqa: BLE001

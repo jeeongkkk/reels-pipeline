@@ -16,12 +16,17 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
 # Streamlit Community Cloud: secrets → env vars bridge
+# TOML numbers/bools (e.g. TAVILY_DAYS = 7) must be stringified into os.environ
 try:
     import streamlit as st
 
     for key, val in st.secrets.items():
-        if isinstance(val, str) and key.upper() == key and key not in os.environ:
-            os.environ[key] = val
+        if key.upper() != key or key in os.environ:
+            continue
+        if isinstance(val, bool):
+            os.environ[key] = "true" if val else "false"
+        elif isinstance(val, (str, int, float)):
+            os.environ[key] = str(val)
 except Exception:
     pass
 

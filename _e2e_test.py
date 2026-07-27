@@ -28,7 +28,7 @@ def _fail(name: str, detail: str) -> None:
 async def test_web_facts() -> list[str]:
     from modules.web_facts import fetch_live_web_facts
 
-    bundle = await fetch_live_web_facts(TOPIC, limit=5, days=30)
+    bundle = await fetch_live_web_facts(TOPIC, limit=5, days=7)
     facts = bundle.prompt_facts(5)
     REPORT["info"]["web_provider"] = bundle.provider
     REPORT["info"]["web_days"] = bundle.days
