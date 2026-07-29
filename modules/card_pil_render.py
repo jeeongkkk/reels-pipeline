@@ -58,10 +58,10 @@ OUTRO_TITLE_BASE = 96
 HEADER_PAD_X = 20
 HEADER_PAD_TOP = 10
 HEADER_PAD_BOTTOM = 12
-LOGO_TOP_Y = 96
-LOGO_MAX_W = 380
-LOGO_MAX_H = 140
-LOGO_CONTENT_GAP = 48
+LOGO_TOP_Y = 80
+LOGO_TARGET_W = 280  # logical px @ 1080 (range 250–300)
+LOGO_MAX_H = 300  # allow square wordmark assets at target width
+LOGO_CONTENT_GAP = 36
 
 FONTS_DIR = ROOT_DIR / "assets" / "fonts" / "Pretendard"
 PAPERLOGY_DIR = ROOT_DIR / "assets" / "fonts" / "Paperlogy"
@@ -366,7 +366,7 @@ def _apply_bottom_linear_gradient(
 
 
 def _logo_to_rgba(img: Image.Image) -> Image.Image:
-    """Knock out near-white / #fafafa logo backdrop."""
+    """Knock out near-white / #fafafa logo backdrop, then trim empty padding."""
     rgba = img.convert("RGBA")
     pixels = rgba.load()
     w, h = rgba.size
@@ -377,6 +377,10 @@ def _logo_to_rgba(img: Image.Image) -> Image.Image:
                 pixels[x, y] = (r, g, b, 0)
             elif r < 28 and g < 28 and b < 28:
                 pixels[x, y] = (r, g, b, 0)
+    # Trim transparent padding so target width maps to visible wordmark
+    bbox = rgba.getbbox()
+    if bbox:
+        rgba = rgba.crop(bbox)
     return rgba
 
 
@@ -394,7 +398,7 @@ def draw_logo(
     position: str = "top",
     brand_name: str = BRAND_FALLBACK,
 ) -> int:
-    """Place brand logo. Returns bottom Y of logo (or top margin if missing)."""
+    """Place brand logo at ~280px wide (@1080). Returns bottom Y of logo."""
     w, h = base.size
     logo_path = _find_logo_path()
     draw = ImageDraw.Draw(base)
@@ -403,14 +407,20 @@ def draw_logo(
     if logo_path:
         with Image.open(logo_path) as raw:
             logo = _logo_to_rgba(raw)
-        max_w = LOGO_MAX_W * scale
-        max_h = LOGO_MAX_H * scale
-        if position == "bottom_right":
-            max_w = int(LOGO_MAX_W * 0.75 * scale)
-            max_h = int(LOGO_MAX_H * 0.75 * scale)
         lw, lh = logo.size
-        ratio = min(max_w / max(lw, 1), max_h / max(lh, 1))
-        nw, nh = max(1, int(lw * ratio)), max(1, int(lh * ratio))
+        # Width-first: 250–300 logical px on 1080 canvas
+        target_w = LOGO_TARGET_W * scale
+        if position == "bottom_right":
+            target_w = int(LOGO_TARGET_W * 0.85 * scale)
+        ratio = target_w / max(lw, 1)
+        nw = max(1, int(lw * ratio))
+        nh = max(1, int(lh * ratio))
+        # Cap height if aspect is unusually tall
+        max_h = LOGO_MAX_H * scale
+        if nh > max_h:
+            ratio = max_h / max(lh, 1)
+            nw = max(1, int(lw * ratio))
+            nh = max(1, int(lh * ratio))
         logo = logo.resize((nw, nh), Image.Resampling.LANCZOS)
         if position == "bottom_right":
             x = w - MARGIN_X * scale - nw
@@ -433,7 +443,6 @@ def draw_logo(
         x = (w - int(tw)) // 2
         y = top_y
     left, top, _, _ = _text_bbox(label, font)
-    # Dark ink on light slides; white on dark photo covers (text fallback rare)
     fill = INK if base.getpixel((0, 0))[0] > 180 else PURE_WHITE
     draw.text((x - left, y - top), label, fill=fill, font=font)
     return y + th
@@ -558,7 +567,7 @@ def _draw_header_box(
     accent: tuple[int, int, int],
     scale: int,
 ) -> int:
-    """Tight terracotta box behind white header, centered."""
+    """Accent box + white Bold subtitle (font must be Bold/ExtraBold)."""
     plain = _clean_display(text)
     if not plain:
         return y
@@ -579,6 +588,26 @@ def _draw_header_box(
     text_y = y + pad_top - top
     draw.text((text_x, text_y), plain, fill=PURE_WHITE, font=font)
     return y + box_h
+
+
+def _fit_header_box_font(
+    text: str,
+    *,
+    max_width: int,
+    base_size: int,
+    scale: int,
+    min_size: int = 26,
+) -> tuple[int, ImageFont.ImageFont]:
+    """Bold/ExtraBold font reserved for orange subtitle boxes only."""
+    return _fit_single_line(
+        text,
+        max_width=max_width,
+        base_size=base_size,
+        scale=scale,
+        weight="extrabold",
+        min_size=min_size,
+        family="pretendard",
+    )
 
 
 def _circled_num(num: str) -> str:
@@ -746,12 +775,11 @@ def _render_content(
     header_font = None
     header_h = 0
     if header:
-        _, header_font = _fit_single_line(
+        _, header_font = _fit_header_box_font(
             header,
             max_width=max_w - HEADER_PAD_X * 2 * scale,
             base_size=CONTENT_HEADER_BASE,
             scale=scale,
-            weight="regular",
             min_size=26,
         )
         header_h = (
@@ -840,7 +868,7 @@ def _render_summary(
         if clean:
             items.append(clean)
 
-    title_font = _font(SUMMARY_TITLE_BASE * scale, weight="regular")
+    title_font = _font(SUMMARY_TITLE_BASE * scale, weight="extrabold")
     item_fonts: list[ImageFont.ImageFont] = []
     for clean in items:
         _, f = _fit_single_line(
