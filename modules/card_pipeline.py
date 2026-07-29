@@ -77,7 +77,7 @@ def _append_fixed_outro(
     out.append(
         {
             "slide_type": "OUTRO",
-            "title_lines": ["당신의", "'전략 기획실'이", "되어드립니다."],
+            "title_lines": ["당신의", "전략 기획실이", "되어드립니다."],
             "subtitle": "단 하나의 실전 비즈니스 인사이트, 위드조율",
             "source_credit": source_credit,
         }

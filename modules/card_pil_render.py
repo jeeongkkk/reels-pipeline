@@ -48,22 +48,24 @@ COVER_BOX_PAD_X = 16
 COVER_BOX_PAD_Y = 10
 COVER_BOX_RADIUS = 8
 
-CONTENT_LEFT = 120  # ~11% of 1080
-CONTENT_HEADER_BASE = 74  # orange box subtitle
-CONTENT_BODY_BASE = 64
-CONTENT_LINE_FACTOR = 1.55
-CONTENT_HEADER_GAP = 110  # box → first body line
-SUMMARY_TITLE_BASE = 74
-SUMMARY_ITEM_BASE = 64
-SUMMARY_LINE_STEP = 1.55
-SUMMARY_HEADER_GAP = 110
+CONTENT_LEFT = 100
+CONTENT_HEADER_BASE = 52  # orange box subtitle 50–55
+CONTENT_BODY_BASE = 42  # body 40–45
+CONTENT_LINE_FACTOR = 1.72  # airier leading with smaller type
+CONTENT_HEADER_GAP = 88  # box → first body line
+SUMMARY_TITLE_BASE = 52
+SUMMARY_ITEM_BASE = 42
+SUMMARY_LINE_STEP = 1.72
+SUMMARY_HEADER_GAP = 88
 
-OUTRO_TITLE_BASE = 132
-OUTRO_SUB_BASE = 45
-OUTRO_TITLE_GAP = 18
-OUTRO_SUB_GAP = 40
-OUTRO_SOURCE_SIZE = 35
-OUTRO_SOURCE_MARGIN = 100
+OUTRO_TITLE_BASE = 96  # 90–100
+OUTRO_SUB_BASE = 35
+OUTRO_TITLE_GAP = 16
+OUTRO_SUB_GAP = 36
+OUTRO_SOURCE_SIZE = 24  # 22–25
+OUTRO_SOURCE_RIGHT = 80
+OUTRO_SOURCE_BOTTOM = 80
+OUTRO_HIGHLIGHT = "전략 기획실"
 
 HEADER_PAD_X = 22
 HEADER_PAD_TOP = 14
@@ -442,23 +444,193 @@ def _draw_left_header_box(
     return y + th + pad_top + pad_bot
 
 
-def _draw_right_aligned(
+def _draw_right_aligned_block(
+    draw: ImageDraw.ImageDraw,
+    lines: list[str],
+    *,
+    bottom: int,
+    right: int,
+    font: ImageFont.ImageFont,
+    fill: tuple[int, int, int],
+    line_gap: int = 6,
+) -> None:
+    """Right-align one or more lines; bottom is the baseline bottom of the block."""
+    heights = [_text_height(ln, font) for ln in lines if ln]
+    if not heights:
+        return
+    total = sum(heights) + line_gap * (len(heights) - 1)
+    y = bottom - total
+    for ln in lines:
+        if not ln:
+            continue
+        left, top, r0, b0 = _text_bbox(ln, font)
+        tw = r0 - left
+        x = right - tw - left
+        draw.text((x, y - top), ln, fill=fill, font=font)
+        y += (b0 - top) + line_gap
+
+
+def _wrap_source_lines(text: str, *, font: ImageFont.ImageFont, max_width: int) -> list[str]:
+    """Wrap source credit to fit max_width (prefer ~2 lines)."""
+    plain = (text or "").strip()
+    if not plain:
+        return []
+    if _text_width(plain, font) <= max_width:
+        return [plain]
+    # Character-aware wrap for Korean (no spaces): binary search chunk sizes
+    lines: list[str] = []
+    rest = plain
+    while rest:
+        if _text_width(rest, font) <= max_width:
+            lines.append(rest)
+            break
+        lo, hi = 1, len(rest)
+        best = 1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            chunk = rest[:mid]
+            if _text_width(chunk, font) <= max_width:
+                best = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        # Prefer breaking after " | " when possible
+        cut = best
+        pipe = rest.rfind("|", 0, best + 1)
+        if pipe >= 4:
+            cut = pipe + 1
+        lines.append(rest[:cut].rstrip())
+        rest = rest[cut:].lstrip(" |")
+        if len(lines) >= 3:
+            if rest:
+                lines[-1] = (lines[-1] + rest)[: max(1, best)]
+            break
+    return [ln for ln in lines if ln]
+
+
+def _draw_outro_title_line(
     draw: ImageDraw.ImageDraw,
     text: str,
     *,
     y: int,
-    right: int,
+    x: int,
     font: ImageFont.ImageFont,
-    fill: tuple[int, int, int],
+    accent: tuple[int, int, int],
+    default_fill: tuple[int, int, int] = INK,
 ) -> int:
-    plain = (text or "").strip()
+    """Draw outro line; paint OUTRO_HIGHLIGHT segment in brand orange."""
+    plain = (text or "").replace("'", "").replace("'", "").replace("'", "")
+    plain = plain.strip()
     if not plain:
         return y
-    left, top, r0, bottom = _text_bbox(plain, font)
-    tw = r0 - left
-    x = right - tw - left
-    draw.text((x, y - top), plain, fill=fill, font=font)
-    return y + (bottom - top)
+    hi = OUTRO_HIGHLIGHT
+    idx = plain.find(hi)
+    left0, top0, _, bottom0 = _text_bbox(plain, font)
+    if idx < 0:
+        draw.text((x - left0, y - top0), plain, fill=default_fill, font=font)
+        return y + (bottom0 - top0)
+
+    before = plain[:idx]
+    after = plain[idx + len(hi) :]
+    cur_x = x
+    if before:
+        bl, bt, br, _bb = _text_bbox(before, font)
+        draw.text((cur_x - bl, y - top0), before, fill=default_fill, font=font)
+        cur_x += int(_text_width(before, font))
+    hl, _ht, hr, _hb = _text_bbox(hi, font)
+    draw.text((cur_x - hl, y - top0), hi, fill=accent, font=font)
+    cur_x += int(_text_width(hi, font))
+    if after:
+        al, _at, _ar, _ab = _text_bbox(after, font)
+        draw.text((cur_x - al, y - top0), after, fill=default_fill, font=font)
+    return y + (bottom0 - top0)
+
+
+def _render_outro(
+    base: Image.Image,
+    slide: dict[str, Any],
+    *,
+    brand_color: str,
+    logo: str,
+    scale: int,
+    source_credit: str = "",
+) -> Image.Image:
+    del logo
+    accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
+    draw = ImageDraw.Draw(base)
+    w, h = CARD_W * scale, CARD_H * scale
+    draw_text_wordmark(base, scale=scale)
+
+    left_x = CONTENT_LEFT * scale
+    max_w = w - left_x - CONTENT_LEFT * scale
+    lines = _as_lines(slide.get("title_lines"))
+    if not lines:
+        lines = ["당신의", "전략 기획실이", "되어드립니다."]
+    # Strip leftover quotes from any pipeline copy
+    lines = [
+        ln.replace("'", "").replace("'", "").replace("'", "").strip()
+        for ln in lines[:4]
+        if ln.strip()
+    ]
+
+    prepared: list[tuple[str, ImageFont.ImageFont]] = []
+    for clean in lines:
+        _, font = _fit_single_line(
+            clean,
+            max_width=max_w,
+            base_size=OUTRO_TITLE_BASE,
+            scale=scale,
+            weight="black",
+            min_size=78,
+            family="paperlogy",
+        )
+        prepared.append((clean, font))
+
+    sub = _clean_display(
+        str(
+            slide.get("subtitle")
+            or slide.get("category_tag")
+            or "단 하나의 실전 비즈니스 인사이트, 위드조율"
+        )
+    )
+    sub_font = _font(OUTRO_SUB_BASE * scale, weight="regular", family="pretendard")
+    title_gap = OUTRO_TITLE_GAP * scale
+    sub_gap = OUTRO_SUB_GAP * scale
+    total_height = sum(_text_height(t, f) for t, f in prepared)
+    total_height += title_gap * max(0, len(prepared) - 1)
+    if sub:
+        total_height += sub_gap + _text_height(sub, sub_font)
+
+    y = max((h - total_height) // 2, int(h * 0.22))
+    for i, (clean, font) in enumerate(prepared):
+        y = _draw_outro_title_line(
+            draw, clean, y=y, x=left_x, font=font, accent=accent, default_fill=INK
+        )
+        if i < len(prepared) - 1:
+            y += title_gap
+    if sub:
+        y += sub_gap
+        _draw_left_line(draw, sub, y=y, x=left_x, font=sub_font, fill=INK_SOFT)
+
+    credit = (source_credit or str(slide.get("source_credit") or "")).strip()
+    if credit:
+        if not credit.startswith("출처"):
+            credit = f"출처 | {credit}"
+        sfont = _font(OUTRO_SOURCE_SIZE * scale, weight="regular", family="pretendard")
+        right = w - OUTRO_SOURCE_RIGHT * scale
+        max_src_w = right - (CONTENT_LEFT * scale)
+        wrapped = _wrap_source_lines(credit, font=sfont, max_width=max(80, max_src_w))
+        bottom = h - OUTRO_SOURCE_BOTTOM * scale
+        _draw_right_aligned_block(
+            draw,
+            wrapped,
+            bottom=bottom,
+            right=right,
+            font=sfont,
+            fill=SOURCE_GRAY,
+            line_gap=max(4, int(6 * scale)),
+        )
+    return base
 
 
 def _draw_centered_line(
@@ -794,7 +966,7 @@ def _render_content(
             max_width=max_w - HEADER_PAD_X * 2 * scale,
             base_size=CONTENT_HEADER_BASE,
             scale=scale,
-            min_size=52,
+            min_size=40,
         )
         header_h = (
             _text_height(header, header_font)
@@ -811,7 +983,7 @@ def _render_content(
             base_size=CONTENT_BODY_BASE,
             scale=scale,
             weight="regular",
-            min_size=48,
+            min_size=34,
         )
         prepared.append((raw, size, font))
 
@@ -872,7 +1044,7 @@ def _render_summary(
         max_width=max_w - HEADER_PAD_X * 2 * scale,
         base_size=SUMMARY_TITLE_BASE,
         scale=scale,
-        min_size=52,
+        min_size=40,
     )
     item_fonts: list[ImageFont.ImageFont] = []
     for clean in items:
@@ -882,7 +1054,7 @@ def _render_summary(
             base_size=SUMMARY_ITEM_BASE,
             scale=scale,
             weight="regular",
-            min_size=48,
+            min_size=34,
         )
         item_fonts.append(f)
 
@@ -910,75 +1082,6 @@ def _render_summary(
             draw, label, y=y, x=left_x, font=font, accent=accent, default_fill=INK
         )
         y += line_gap
-    return base
-
-
-def _render_outro(
-    base: Image.Image,
-    slide: dict[str, Any],
-    *,
-    brand_color: str,
-    logo: str,
-    scale: int,
-    source_credit: str = "",
-) -> Image.Image:
-    del brand_color, logo
-    draw = ImageDraw.Draw(base)
-    w, h = CARD_W * scale, CARD_H * scale
-    draw_text_wordmark(base, scale=scale)
-
-    left_x = CONTENT_LEFT * scale
-    max_w = w - left_x - CONTENT_LEFT * scale
-    lines = _as_lines(slide.get("title_lines"))
-    if not lines:
-        lines = ["당신의", "'전략 기획실'이", "되어드립니다."]
-    lines = lines[:4]
-
-    prepared: list[tuple[str, ImageFont.ImageFont]] = []
-    for clean in lines:
-        _, font = _fit_single_line(
-            clean,
-            max_width=max_w,
-            base_size=OUTRO_TITLE_BASE,
-            scale=scale,
-            weight="black",
-            min_size=100,
-            family="paperlogy",
-        )
-        prepared.append((clean, font))
-
-    sub = _clean_display(
-        str(
-            slide.get("subtitle")
-            or slide.get("category_tag")
-            or "단 하나의 실전 비즈니스 인사이트, 위드조율"
-        )
-    )
-    sub_font = _font(OUTRO_SUB_BASE * scale, weight="regular", family="pretendard")
-    title_gap = OUTRO_TITLE_GAP * scale
-    sub_gap = OUTRO_SUB_GAP * scale
-    total_height = sum(_text_height(t, f) for t, f in prepared)
-    total_height += title_gap * max(0, len(prepared) - 1)
-    if sub:
-        total_height += sub_gap + _text_height(sub, sub_font)
-
-    y = max((h - total_height) // 2, int(h * 0.22))
-    for i, (clean, font) in enumerate(prepared):
-        y = _draw_left_line(draw, clean, y=y, x=left_x, font=font, fill=INK)
-        if i < len(prepared) - 1:
-            y += title_gap
-    if sub:
-        y += sub_gap
-        _draw_left_line(draw, sub, y=y, x=left_x, font=sub_font, fill=INK_SOFT)
-
-    credit = (source_credit or str(slide.get("source_credit") or "")).strip()
-    if credit:
-        if not credit.startswith("출처"):
-            credit = f"출처 | {credit}"
-        sfont = _font(OUTRO_SOURCE_SIZE * scale, weight="regular", family="pretendard")
-        right = w - OUTRO_SOURCE_MARGIN * scale
-        sy = h - OUTRO_SOURCE_MARGIN * scale - _text_height(credit, sfont)
-        _draw_right_aligned(draw, credit, y=sy, right=right, font=sfont, fill=SOURCE_GRAY)
     return base
 
 
