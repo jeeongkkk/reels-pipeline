@@ -16,8 +16,8 @@ from modules.utils import ensure_dir, get_logger
 logger = get_logger(__name__)
 
 CARD_WIDTH = 1080
-CARD_HEIGHT = 1920
-DEVICE_SCALE = 2  # -> 2160x3840 retina PNG
+CARD_HEIGHT = 1440
+DEVICE_SCALE = 2  # -> 2160x2880 retina PNG
 
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="card-render")
 
@@ -30,6 +30,7 @@ def _render_all_sync(
     logo: str,
     highlight_mode: str = "color",
     ig_handle: str = "",
+    source_credit: str = "",
 ) -> list[Path]:
     """Sync entry used by card_capture_worker (PIL, not Playwright)."""
     del highlight_mode  # legacy compat
@@ -40,9 +41,10 @@ def _render_all_sync(
         slides,
         backgrounds,
         output_dir,
-        brand_color=brand_color or "#0055FF",
+        brand_color=brand_color or "#fc4d01",
         logo=logo,
         ig_handle=ig_handle,
+        source_credit=source_credit,
     )
 
 
@@ -51,10 +53,11 @@ async def render_slides_to_pngs(
     backgrounds: list[Path],
     output_dir: Path,
     *,
-    brand_color: str = "#0055FF",
+    brand_color: str = "#fc4d01",
     logo: str = "authority",
     highlight_mode: str = "color",
     ig_handle: str = "",
+    source_credit: str = "",
 ) -> list[Path]:
     """Render slides to retina PNGs via PIL Insight layouts."""
     if not backgrounds:
@@ -72,5 +75,6 @@ async def render_slides_to_pngs(
             logo,
             highlight_mode,
             ig_handle,
+            source_credit,
         ),
     )

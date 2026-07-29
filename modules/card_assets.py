@@ -236,14 +236,14 @@ async def fetch_backgrounds_for_slides(
     article_urls = [u for u in (article_urls or []) if (u or "").strip()]
     if not slides:
         path = output_dir / "default.png"
-        Image.new("RGB", (1080, 1920), (240, 240, 240)).save(path)
+        Image.new("RGB", (1080, 1440), (250, 250, 250)).save(path)
         return [BackgroundResult(path=path, source="solid")]
 
     results: list[BackgroundResult] = []
 
-    def _solid(dest: Path, rgb: tuple[int, int, int] = (240, 240, 240)) -> Path:
+    def _solid(dest: Path, rgb: tuple[int, int, int] = (250, 250, 250)) -> Path:
         ensure_dir(dest.parent)
-        Image.new("RGB", (1080, 1920), rgb).save(dest)
+        Image.new("RGB", (1080, 1440), rgb).save(dest)
         return dest
 
     for i, slide in enumerate(slides):
@@ -390,10 +390,10 @@ def _placeholder_photo(path: Path, seed: str) -> Path:
     h = abs(hash(seed))
     c1 = ((h >> 16) & 255, (h >> 8) & 255, h & 255)
     c2 = (max(10, c1[0] // 3), max(10, c1[1] // 3), max(10, c1[2] // 3))
-    img = Image.new("RGB", (1080, 1920), c2)
+    img = Image.new("RGB", (1080, 1440), c2)
     draw = ImageDraw.Draw(img)
-    for y in range(1920):
-        t = y / 1920
+    for y in range(1440):
+        t = y / 1440
         col = tuple(int(c2[i] * (1 - t) + c1[i] * t * 0.35) for i in range(3))
         draw.line([(0, y), (1080, y)], fill=col)
     if path.suffix.lower() == ".png":
@@ -404,11 +404,11 @@ def _placeholder_photo(path: Path, seed: str) -> Path:
 
 
 def _normalize_to_portrait(path: Path, *, as_png: bool = False) -> Path:
-    """Center-crop / resize to exactly 1080×1920."""
+    """Center-crop / resize to exactly 1080×1440."""
     try:
         with Image.open(path) as img:
             img = img.convert("RGB")
-            tw, th = 1080, 1920
+            tw, th = 1080, 1440
             src_w, src_h = img.size
             target_ratio = tw / th
             src_ratio = src_w / max(src_h, 1)
@@ -438,7 +438,7 @@ def _normalize_to_portrait(path: Path, *, as_png: bool = False) -> Path:
 
 
 def _finalize_slide_bg(src: Path, output_dir: Path, index: int) -> Path:
-    """Always write 1080×1920 PNG to templates/slide_bg_{n}.png + project copy."""
+    """Always write 1080×1440 PNG to templates/slide_bg_{n}.png + project copy."""
     ensure_dir(TEMPLATES_DIR)
     ensure_dir(output_dir)
     n = index + 1
@@ -448,7 +448,7 @@ def _finalize_slide_bg(src: Path, output_dir: Path, index: int) -> Path:
     normalized = _normalize_to_portrait(src, as_png=True)
     try:
         with Image.open(normalized) as img:
-            img = img.convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS)
+            img = img.convert("RGB").resize((1080, 1440), Image.Resampling.LANCZOS)
             img.save(template_path, optimize=True)
             img.save(project_path, optimize=True)
     except Exception as exc:  # noqa: BLE001
@@ -952,7 +952,7 @@ def _make_corporate_gradient(dest: Path, index: int) -> Path:
     from PIL import Image, ImageDraw
 
     ensure_dir(dest.parent)
-    w, h = 1080, 1920
+    w, h = 1080, 1440
     schemes: list[tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]] = [
         ((10, 14, 26), (38, 32, 72), (90, 75, 180)),
         ((8, 12, 20), (22, 40, 62), (60, 110, 160)),
@@ -990,7 +990,7 @@ async def get_background_image(
 ) -> BackgroundResult:
     """3-tier waterfall: web photo → Pollinations Flux → local SD-Turbo.
 
-    Always finalizes to 1080×1920 PNG at templates/slide_bg_{n}.png.
+    Always finalizes to 1080×1440 PNG at templates/slide_bg_{n}.png.
     Never raises – placeholder is the absolute last resort.
     """
     ensure_dir(output_dir)
@@ -1144,7 +1144,7 @@ def _make_topic_gradient(dest: Path, slide: dict, index: int) -> Path:
         c_top, c_bot, accent = (10, 14, 26), (38, 32, 72), (90, 75, 180)
 
     ensure_dir(dest.parent)
-    w, h = 1080, 1920
+    w, h = 1080, 1440
     img = Image.new("RGB", (w, h))
     draw = ImageDraw.Draw(img)
     for y in range(h):

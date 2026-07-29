@@ -28,7 +28,7 @@ FAL_BG_PROMPT = (
     "messy real desk with crumpled receipts, iced coffee cup, open laptop half out of frame, "
     "phone charger cable tangled, natural window light, slightly imperfect framing, "
     "candid everyday workspace snapshot, "
-    "9:16 vertical, no text, no watermark, no logo"
+    "3:4 vertical, no text, no watermark, no logo"
 )
 
 FAL_NEGATIVE = (
@@ -119,8 +119,8 @@ def apply_master_style(prompt: str) -> str:
         )
     if "iphone" not in low and "ugc" not in low and "smartphone photography" not in low:
         text = f"{text}, {FAL_MASTER_STYLE_SUFFIX}"
-    if "9:16" not in text and "vertical" not in low:
-        text = f"{text}, 9:16 vertical"
+    if "3:4" not in text and "vertical" not in low:
+        text = f"{text}, 3:4 vertical"
     return text
 
 
@@ -151,7 +151,7 @@ async def generate_flux_background(
             arguments={
                 "prompt": use_prompt,
                 "negative_prompt": FAL_NEGATIVE,
-                "image_size": {"width": 1080, "height": 1920},
+                "image_size": {"width": 1080, "height": 1440},
                 "num_inference_steps": 4,
                 "seed": use_seed,
             },

@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str = ""
     whisper_model: str = "base"
     output_width: int = 1080
-    output_height: int = 1920
+    output_height: int = 1440
     output_fps: int = 30
     bgm_volume_normal: float = 0.30
     bgm_volume_ducked: float = 0.12

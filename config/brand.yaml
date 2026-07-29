@@ -143,5 +143,5 @@ card_news:
   brand_name: "WITHCHOYOOL"
   slides_min: 6
   slides_max: 8
-  device_scale_factor: 2       # 1080×1920 viewport → 2160×3840 PNG
+  device_scale_factor: 2       # 1080×1440 viewport → 2160×2880 PNG
   output: "png_zip"            # MoviePy removed from card path

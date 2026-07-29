@@ -1,7 +1,7 @@
 """Card-news end-to-end: script → real photos → retina PNGs → ZIP.
 
 MoviePy / video assembly is intentionally removed from this path.
-Primary deliverable = ultra-HD PNG pack (2160×3840) as card_slides.zip.
+Primary deliverable = ultra-HD PNG pack (2160×2880, 1080×1440 @2x) as card_slides.zip.
 """
 
 from __future__ import annotations
@@ -45,6 +45,44 @@ def _zip_slides(pngs: list[Path], zip_path: Path) -> Path:
     data = build_slides_zip_bytes(pngs)
     zip_path.write_bytes(data)
     return zip_path
+
+
+def _build_source_credit(web_meta: Any, facts: list[str]) -> str:
+    """Human-readable source line for OUTRO bottom-right."""
+    if web_meta is not None:
+        rows = getattr(web_meta, "facts", None) or []
+        for f in rows:
+            title = str(getattr(f, "title", "") or "").strip()
+            if title:
+                return title[:48].rstrip()
+        provider = str(getattr(web_meta, "provider", "") or "").strip()
+        if provider:
+            return f"{provider} 리서치"
+    for fact in facts:
+        t = str(fact or "").strip()
+        if t:
+            return t.split("—")[0].split("-")[0].strip()[:48]
+    return "웹·뉴스 리서치"
+
+
+def _append_fixed_outro(
+    slides: list[dict[str, Any]], *, source_credit: str
+) -> list[dict[str, Any]]:
+    """Ensure one fixed OUTRO slide at the end."""
+    out = [
+        s
+        for s in slides
+        if str(s.get("slide_type") or "").upper() not in {"OUTRO", "CTA", "ENDING"}
+    ]
+    out.append(
+        {
+            "slide_type": "OUTRO",
+            "title_lines": ["당신의", "'전략 기획실'이", "되어드립니다."],
+            "subtitle": "단 하나의 실전 비즈니스 인사이트, 위드조율",
+            "source_credit": source_credit,
+        }
+    )
+    return out
 
 
 async def render_card_news_project(
@@ -96,6 +134,8 @@ async def render_card_news_project(
             f"웹 팩트 {len(web_meta.facts)}건 ({web_meta.provider})",
         )
     slides = [s.to_dict() for s in script.slides]
+    source_credit = _build_source_credit(web_meta, facts)
+    slides = _append_fixed_outro(slides, source_credit=source_credit)
     _emit(on_progress, 50, f"슬라이드 {len(slides)}장 확정 (source={script.source})")
 
     _emit(on_progress, 55, "표지(COVER) 실사 우선 (og → CSE/Pexels → Fal)...")
@@ -131,7 +171,7 @@ async def render_card_news_project(
     _emit(on_progress, 62, f"배경 {len(backgrounds)}장 ({sources})")
 
     frames_dir = ensure_dir(project_dir / "card_frames")
-    _emit(on_progress, 68, "레티나 PNG 합성 중 (Insight · COVER/CONTENT/SUMMARY)...")
+    _emit(on_progress, 68, "레티나 PNG 합성 중 (1080×1440 · COVER/CONTENT/SUMMARY/OUTRO)...")
     pngs = await render_slides_to_pngs(
         slides,
         backgrounds,
@@ -140,6 +180,7 @@ async def render_card_news_project(
         logo=logo,
         highlight_mode=highlight_mode,
         ig_handle=ig_handle,
+        source_credit=source_credit,
     )
 
     _emit(on_progress, 88, "초고화질 PNG ZIP 패키징 중...")
@@ -151,9 +192,10 @@ async def render_card_news_project(
             "frames_dir": str(frames_dir),
             "slides_zip": str(zip_path),
             "slide_count": len(pngs),
-            "resolution": "2160x3840",
+            "resolution": "2160x2880",
             "device_scale_factor": 2,
             "make_video": False,
+            "source_credit": source_credit,
         },
     )
     _emit(on_progress, 92, f"카드 {len(pngs)}장 PNG ZIP 완료")
