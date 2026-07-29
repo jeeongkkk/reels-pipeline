@@ -49,7 +49,7 @@ async def render_project(
     project_dir: Path | None = None,
     on_progress: ProgressFn | None = None,
     use_tts: bool = True,
-    brand_color: str = "#DD5138",
+    brand_color: str = "#fc4d01",
     highlight_mode: str = "color",
     draft_mode: bool = False,
     make_video: bool = False,

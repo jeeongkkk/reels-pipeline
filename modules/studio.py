@@ -59,7 +59,7 @@ async def run_full_studio_pipeline(
     make_publish_package: bool = True,
     on_progress: ProgressFn | None = None,
     use_tts: bool = True,
-    brand_color: str = "#0055FF",
+    brand_color: str = "#fc4d01",
     highlight_mode: str = "color",
     draft_mode: bool = False,
     make_video: bool = False,

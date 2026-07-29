@@ -331,30 +331,23 @@ if page == "🎬 새 제작":
         )
 
         use_tts = False
-        brand_color = "#DD5138"
+        brand_color = "#fc4d01"
         highlight_mode = "color"
         make_video = False
         draft_mode = False
         if mode == ProductionMode.CARD_NEWS:
             st.markdown("**카드뉴스 옵션**")
             brand_color = st.color_picker(
-                "브랜드 포인트 컬러 (표지 강조 박스)",
-                value="#DD5138",
-            )
-            ig_handle = st.text_input(
-                "표지 인스타 주소",
-                placeholder="@with_choyool",
-                help="표지 제목 위에 표시됩니다. @ 없이 입력해도 됩니다.",
-                key="cover_ig_handle",
+                "브랜드 포인트 컬러 (표지·소제목 박스)",
+                value="#fc4d01",
             )
             highlight_mode = "box"
             st.caption(
-                "표지: 로고 없음 · 하단 좌측 큰 제목 · 포인트 컬러 후킹 박스 · "
-                "본문만 WITH CHOYOOL 로고"
+                "표지 IG 고정: @with.choyool · 본문: #fafafa + WITHCHOYOOL 로고 · "
+                "포인트 컬러 기본 #fc4d01"
             )
         else:
             use_tts = True
-            ig_handle = ""
         with st.expander("📋 스크랩 직접 입력 (선택)", expanded=False):
             custom_scrap = st.text_area(
                 "내용 붙여넣기 (한 줄에 하나의 팩트·기사 요약·URL)",
@@ -463,7 +456,7 @@ if page == "🎬 새 제작":
                         make_video=make_video,
                         category_id=category.id if use_auto else None,
                         custom_facts=user_facts or None,
-                        ig_handle=ig_handle if mode == ProductionMode.CARD_NEWS else "",
+                        ig_handle="",
                     )
                 )
                 progress.progress(100, text="완료")

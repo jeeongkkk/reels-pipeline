@@ -1,4 +1,4 @@
-"""PIL Dark Minimal Magazine compositor – COVER / CONTENT / OUTRO."""
+"""PIL card compositor – COVER (photo) / CONTENT·SUMMARY (light studio)."""
 
 from __future__ import annotations
 
@@ -16,24 +16,27 @@ CARD_W = 1080
 CARD_H = 1920
 RETINA = 2
 
-# ── Dark Minimal Magazine palette ─────────────────────────────
-BG_DARK = (21, 21, 21)  # #151515
-ACCENT = (221, 81, 56)  # #DD5138 terracotta
+# ── WITHCHOYOOL Business Studio palette ───────────────────────
+BG_DARK = (21, 21, 21)  # cover gradient / fallback
+BG_LIGHT = (250, 250, 250)  # #fafafa – body slides
+ACCENT = (252, 77, 1)  # #fc4d01 brand orange
 PURE_WHITE = (255, 255, 255)
-SOFT_WHITE = (221, 221, 221)  # #DDDDDD secondary
-INK = PURE_WHITE
+SOFT_WHITE = (221, 221, 221)
+INK = (17, 17, 17)  # #111111 body text on light slides
+INK_SOFT = (34, 34, 34)  # #222222
 
 MARGIN_X = 80
-BRAND_FALLBACK = "WITH CHOYOOL"
-DEFAULT_BRAND_COLOR = "#DD5138"
+BRAND_FALLBACK = "WITHCHOYOOL"
+DEFAULT_BRAND_COLOR = "#fc4d01"
+COVER_IG_HANDLE = "@with.choyool"  # fixed cover handle
 
 COVER_DIM_ALPHA = 0.62  # legacy
 COVER_GRAD_TOP_ALPHA = 220  # legacy top-down
 COVER_GRAD_BOTTOM_ALPHA = 240
-COVER_GRAD_SOLID_RATIO = 0.22  # solid black band at bottom
-COVER_GRAD_FADE_RATIO = 0.34  # soft fade upward into photo
-COVER_TEXT_Y_RATIO = 0.55  # headline block starts in lower band
-COVER_TITLE_BASE = 96  # large cover type (ref image 2)
+COVER_GRAD_SOLID_RATIO = 0.22
+COVER_GRAD_FADE_RATIO = 0.34
+COVER_TEXT_Y_RATIO = 0.55
+COVER_TITLE_BASE = 96
 COVER_TITLE_MIN = 56
 COVER_LEFT_RATIO = 0.08
 COVER_MAX_W_RATIO = 0.86
@@ -44,19 +47,21 @@ COVER_HANDLE_GAP = 28
 COVER_BOX_PAD_X = 18
 COVER_BOX_PAD_Y = 12
 COVER_BOX_RADIUS = 10
-CONTENT_HEADER_BASE = 42
-CONTENT_BODY_BASE = 62
-CONTENT_LINE_FACTOR = 1.85
-SUMMARY_TITLE_BASE = 52
-SUMMARY_ITEM_BASE = 48
-SUMMARY_LINE_STEP = 1.9
-OUTRO_TITLE_BASE = 110
-HEADER_PAD_X = 22
-HEADER_PAD_TOP = 12
-HEADER_PAD_BOTTOM = 16
-LOGO_TOP_Y = 110
-LOGO_MAX_W = 260
-LOGO_MAX_H = 150
+CONTENT_HEADER_BASE = 36
+CONTENT_BODY_BASE = 50
+# Original dark-theme leading was ~1.85 / 1.90 → ~20% tighter
+CONTENT_LINE_FACTOR = 1.48
+SUMMARY_TITLE_BASE = 40
+SUMMARY_ITEM_BASE = 40
+SUMMARY_LINE_STEP = 1.52
+OUTRO_TITLE_BASE = 96
+HEADER_PAD_X = 20
+HEADER_PAD_TOP = 10
+HEADER_PAD_BOTTOM = 12
+LOGO_TOP_Y = 96
+LOGO_MAX_W = 380
+LOGO_MAX_H = 140
+LOGO_CONTENT_GAP = 48
 
 FONTS_DIR = ROOT_DIR / "assets" / "fonts" / "Pretendard"
 PAPERLOGY_DIR = ROOT_DIR / "assets" / "fonts" / "Paperlogy"
@@ -361,14 +366,16 @@ def _apply_bottom_linear_gradient(
 
 
 def _logo_to_rgba(img: Image.Image) -> Image.Image:
-    """Knock out near-black backdrop so logo sits on #151515 cleanly."""
+    """Knock out near-white / #fafafa logo backdrop."""
     rgba = img.convert("RGBA")
     pixels = rgba.load()
     w, h = rgba.size
     for y in range(h):
         for x in range(w):
             r, g, b, a = pixels[x, y]
-            if r < 28 and g < 28 and b < 28:
+            if r >= 235 and g >= 235 and b >= 235:
+                pixels[x, y] = (r, g, b, 0)
+            elif r < 28 and g < 28 and b < 28:
                 pixels[x, y] = (r, g, b, 0)
     return rgba
 
@@ -386,11 +393,12 @@ def draw_logo(
     scale: int,
     position: str = "top",
     brand_name: str = BRAND_FALLBACK,
-) -> None:
-    """Place brand logo. position: 'top' (center) | 'bottom_right'."""
+) -> int:
+    """Place brand logo. Returns bottom Y of logo (or top margin if missing)."""
     w, h = base.size
     logo_path = _find_logo_path()
     draw = ImageDraw.Draw(base)
+    top_y = LOGO_TOP_Y * scale
 
     if logo_path:
         with Image.open(logo_path) as raw:
@@ -398,8 +406,8 @@ def draw_logo(
         max_w = LOGO_MAX_W * scale
         max_h = LOGO_MAX_H * scale
         if position == "bottom_right":
-            max_w = int(LOGO_MAX_W * 0.85 * scale)
-            max_h = int(LOGO_MAX_H * 0.85 * scale)
+            max_w = int(LOGO_MAX_W * 0.75 * scale)
+            max_h = int(LOGO_MAX_H * 0.75 * scale)
         lw, lh = logo.size
         ratio = min(max_w / max(lw, 1), max_h / max(lh, 1))
         nw, nh = max(1, int(lw * ratio)), max(1, int(lh * ratio))
@@ -409,13 +417,13 @@ def draw_logo(
             y = h - 160 * scale - nh
         else:
             x = (w - nw) // 2
-            y = LOGO_TOP_Y * scale
+            y = top_y
         base.paste(logo, (x, y), logo)
-        return
+        return y + nh
 
     # Fallback text wordmark
     label = re.sub(r"^@", "", brand_name or "").strip() or BRAND_FALLBACK
-    font = _font(28 * scale, weight="medium")
+    font = _font(26 * scale, weight="medium")
     tw = _text_width(label, font)
     th = _text_height(label, font)
     if position == "bottom_right":
@@ -423,16 +431,12 @@ def draw_logo(
         y = h - 180 * scale
     else:
         x = (w - int(tw)) // 2
-        y = LOGO_TOP_Y * scale
+        y = top_y
     left, top, _, _ = _text_bbox(label, font)
-    draw.text((x - left, y - top), label, fill=PURE_WHITE, font=font)
-    # Thin vertical accent bar (Young Boss cue)
-    bar_x = x - 18 * scale
-    draw.line(
-        [(bar_x, y), (bar_x, y + th)],
-        fill=PURE_WHITE,
-        width=max(2, scale),
-    )
+    # Dark ink on light slides; white on dark photo covers (text fallback rare)
+    fill = INK if base.getpixel((0, 0))[0] > 180 else PURE_WHITE
+    draw.text((x - left, y - top), label, fill=fill, font=font)
+    return y + th
 
 
 def _draw_centered_line(
@@ -593,7 +597,14 @@ def _circled_num(num: str) -> str:
 
 def _section_header(slide: dict[str, Any]) -> str:
     num = str(slide.get("section_number") or "").strip()
-    stitle = _clean_display(str(slide.get("section_title") or slide.get("main_title") or ""))
+    stitle = _clean_display(
+        str(
+            slide.get("section_title")
+            or slide.get("section_label")
+            or slide.get("main_title")
+            or ""
+        )
+    )
     mark = _circled_num(num)
     if mark and stitle:
         return f"{mark} {stitle}"
@@ -637,9 +648,9 @@ def _render_cover(
     scale: int,
     ig_handle: str = "",
 ) -> Image.Image:
-    """COVER – no logo; IG handle + large left title; brand box on punch line."""
-    del logo  # cover never shows brand logo
-    accent = _hex_rgb(brand_color)
+    """COVER – no logo; fixed @with.choyool + left title; brand punch box."""
+    del logo, ig_handle  # cover IG is always hardcoded
+    accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     _apply_bottom_linear_gradient(base)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
@@ -649,41 +660,34 @@ def _render_cover(
         title = _clean_display(str(slide.get("main_title") or slide.get("hook") or ""))
         lines = [title] if title else []
     lines = [ln for ln in lines[:4] if ln]
-    handle = _normalize_ig_handle(
-        ig_handle or str(slide.get("ig_handle") or slide.get("instagram") or "")
-    )
-    if not lines and not handle:
+    handle = COVER_IG_HANDLE
+    if not lines:
         return base
 
     max_w = int(w * COVER_MAX_W_RATIO)
     left_x = int(w * COVER_LEFT_RATIO)
-    title_font: ImageFont.ImageFont | None = None
-    if lines:
-        _, title_font = _fit_uniform_lines(
-            lines,
-            max_width=max_w - COVER_BOX_PAD_X * 2 * scale,
-            base_size=COVER_TITLE_BASE,
-            scale=scale,
-            weight="extrabold",
-            min_size=COVER_TITLE_MIN,
-            family="paperlogy",
-        )
+    _, title_font = _fit_uniform_lines(
+        lines,
+        max_width=max_w - COVER_BOX_PAD_X * 2 * scale,
+        base_size=COVER_TITLE_BASE,
+        scale=scale,
+        weight="extrabold",
+        min_size=COVER_TITLE_MIN,
+        family="paperlogy",
+    )
 
     handle_font = _font(COVER_HANDLE_SIZE * scale, weight="medium", family="pretendard")
     gap = int(COVER_LINE_GAP * scale)
-    hi = _cover_highlight_index(lines) if lines else -1
-    box_extra = COVER_BOX_PAD_Y * scale if hi >= 0 else 0
+    hi = _cover_highlight_index(lines)
+    box_extra = COVER_BOX_PAD_Y * scale
 
-    stack_h = 0
-    if handle:
-        stack_h += _text_height(handle, handle_font) + COVER_HANDLE_GAP * scale
-    if lines and title_font is not None:
-        for i, t in enumerate(lines):
-            stack_h += _text_height(t, title_font)
-            if i == hi:
-                stack_h += box_extra
-            if i < len(lines) - 1:
-                stack_h += gap
+    stack_h = _text_height(handle, handle_font) + COVER_HANDLE_GAP * scale
+    for i, t in enumerate(lines):
+        stack_h += _text_height(t, title_font)
+        if i == hi:
+            stack_h += box_extra
+        if i < len(lines) - 1:
+            stack_h += gap
 
     max_bottom = h - COVER_BOTTOM_MARGIN * scale
     y = max_bottom - stack_h
@@ -691,31 +695,34 @@ def _render_cover(
     if y < min_y:
         y = min_y
 
-    if handle:
-        y = _draw_left_line(
-            draw, handle, y=y, x=left_x, font=handle_font, fill=SOFT_WHITE
-        )
-        y += COVER_HANDLE_GAP * scale
+    y = _draw_left_line(draw, handle, y=y, x=left_x, font=handle_font, fill=SOFT_WHITE)
+    y += COVER_HANDLE_GAP * scale
 
-    if lines and title_font is not None:
-        for i, clean in enumerate(lines):
-            if i == hi:
-                y = _draw_left_highlight_box(
-                    draw,
-                    clean,
-                    y=y,
-                    x=left_x,
-                    font=title_font,
-                    accent=accent,
-                    scale=scale,
-                )
-            else:
-                y = _draw_left_line(
-                    draw, clean, y=y, x=left_x, font=title_font, fill=PURE_WHITE
-                )
-            y += gap
+    for i, clean in enumerate(lines):
+        if i == hi:
+            y = _draw_left_highlight_box(
+                draw,
+                clean,
+                y=y,
+                x=left_x,
+                font=title_font,
+                accent=accent,
+                scale=scale,
+            )
+        else:
+            y = _draw_left_line(
+                draw, clean, y=y, x=left_x, font=title_font, fill=PURE_WHITE
+            )
+        y += gap
 
     return base
+
+
+def _content_start_y(*, canvas_h: int, total_height: int, logo_bottom: int, scale: int) -> int:
+    """Dynamic vertical center: (H - total) / 2, floored below logo."""
+    y = (canvas_h - total_height) // 2
+    floor = logo_bottom + LOGO_CONTENT_GAP * scale
+    return max(y, floor)
 
 
 def _render_content(
@@ -726,48 +733,72 @@ def _render_content(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """CONTENT – solid #151515, terracotta header box, centered body + *emphasis*."""
-    accent = _hex_rgb(brand_color)
+    """CONTENT – #fafafa, logo top, Y-centered block, Regular body, #fc4d01 accents."""
+    accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
-    draw_logo(base, scale=scale, position="top", brand_name=logo)
+    logo_bottom = draw_logo(base, scale=scale, position="top", brand_name=logo)
 
     header = _section_header(slide)
     max_w = int(w * 0.88)
-    y = int(h * 0.28)
+    body_lines = [ln for ln in _body_lines_of(slide)[:6] if ln.strip()]
 
+    header_font = None
+    header_h = 0
     if header:
-        _, hfont = _fit_single_line(
+        _, header_font = _fit_single_line(
             header,
             max_width=max_w - HEADER_PAD_X * 2 * scale,
             base_size=CONTENT_HEADER_BASE,
             scale=scale,
-            weight="bold",
-            min_size=28,
+            weight="regular",
+            min_size=26,
         )
-        y = _draw_header_box(
-            draw,
-            header,
-            y=y,
-            canvas_w=w,
-            font=hfont,
-            accent=accent,
-            scale=scale,
+        header_h = (
+            _text_height(header, header_font)
+            + HEADER_PAD_TOP * scale
+            + HEADER_PAD_BOTTOM * scale
         )
-        y += int(72 * scale)
 
-    body_lines = _body_lines_of(slide)[:6]
+    gap_after_header = int(32 * scale) if header else 0
+    prepared: list[tuple[str, int, ImageFont.ImageFont]] = []
     for raw in body_lines:
-        if not raw.strip():
-            continue
         size, font = _fit_single_line(
             raw,
             max_width=max_w,
             base_size=CONTENT_BODY_BASE,
             scale=scale,
-            weight="extrabold",
-            min_size=40,
+            weight="regular",
+            min_size=34,
         )
+        prepared.append((raw, size, font))
+
+    line_gaps = [
+        int(size * scale * (CONTENT_LINE_FACTOR - 1.0)) for _, size, _ in prepared
+    ]
+    total_height = header_h + gap_after_header
+    for i, (raw, size, font) in enumerate(prepared):
+        total_height += _text_height(_plain_from_emphasis(raw), font)
+        if i < len(prepared) - 1:
+            total_height += line_gaps[i]
+
+    y = _content_start_y(
+        canvas_h=h, total_height=total_height, logo_bottom=logo_bottom, scale=scale
+    )
+
+    if header and header_font is not None:
+        y = _draw_header_box(
+            draw,
+            header,
+            y=y,
+            canvas_w=w,
+            font=header_font,
+            accent=accent,
+            scale=scale,
+        )
+        y += gap_after_header
+
+    for i, (raw, size, font) in enumerate(prepared):
         y = _draw_centered_emphasis_line(
             draw,
             raw,
@@ -775,11 +806,10 @@ def _render_content(
             canvas_w=w,
             font=font,
             accent=accent,
-            default_fill=PURE_WHITE,
+            default_fill=INK,
         )
-        y += int(size * scale * (CONTENT_LINE_FACTOR - 1.0))
-        if y > h - 140 * scale:
-            break
+        if i < len(prepared) - 1:
+            y += line_gaps[i]
     return base
 
 
@@ -791,13 +821,15 @@ def _render_summary(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """SUMMARY (slide 7) – centered title + 1~4 takeaway list."""
-    accent = _hex_rgb(brand_color)
+    """SUMMARY – #fafafa, logo, Y-centered list, Regular weight."""
+    accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
-    draw_logo(base, scale=scale, position="top", brand_name=logo)
+    logo_bottom = draw_logo(base, scale=scale, position="top", brand_name=logo)
 
-    title = _clean_display(str(slide.get("main_title") or slide.get("hook") or "핵심 체크 포인트"))
+    title = _clean_display(
+        str(slide.get("main_title") or slide.get("hook") or "핵심 체크 포인트")
+    )
     max_w = int(w * 0.86)
 
     raw_items = _as_lines(slide.get("summary_list") or slide.get("body_points") or [])[:4]
@@ -808,8 +840,7 @@ def _render_summary(
         if clean:
             items.append(clean)
 
-    # Vertical stack height estimate for true optical center
-    title_font = _font(SUMMARY_TITLE_BASE * scale, weight="extrabold")
+    title_font = _font(SUMMARY_TITLE_BASE * scale, weight="regular")
     item_fonts: list[ImageFont.ImageFont] = []
     for clean in items:
         _, f = _fit_single_line(
@@ -817,18 +848,25 @@ def _render_summary(
             max_width=max_w - 40 * scale,
             base_size=SUMMARY_ITEM_BASE,
             scale=scale,
-            weight="extrabold",
-            min_size=34,
+            weight="regular",
+            min_size=30,
         )
         item_fonts.append(f)
 
-    gap_after_title = int(70 * scale)
+    gap_after_title = int(28 * scale)
     line_gap = int(SUMMARY_ITEM_BASE * scale * (SUMMARY_LINE_STEP - 1.0))
-    stack_h = _text_height(title, title_font) + HEADER_PAD_TOP * scale + HEADER_PAD_BOTTOM * scale
-    stack_h += gap_after_title
+    total_height = (
+        _text_height(title, title_font)
+        + HEADER_PAD_TOP * scale
+        + HEADER_PAD_BOTTOM * scale
+        + gap_after_title
+    )
     for clean, font in zip(items, item_fonts):
-        stack_h += _text_height(_plain_from_emphasis(clean), font) + line_gap
-    y = max(int(h * 0.28), (h - stack_h) // 2)
+        total_height += _text_height(_plain_from_emphasis(clean), font) + line_gap
+
+    y = _content_start_y(
+        canvas_h=h, total_height=total_height, logo_bottom=logo_bottom, scale=scale
+    )
 
     y = _draw_header_box(
         draw,
@@ -850,7 +888,7 @@ def _render_summary(
             canvas_w=w,
             font=font,
             accent=accent,
-            default_fill=PURE_WHITE,
+            default_fill=INK,
         )
         y += line_gap
 
@@ -865,8 +903,7 @@ def _render_outro(
     logo: str,
     scale: int,
 ) -> Image.Image:
-    """OUTRO – huge slightly-left title + bottom-right logo (no summary_list)."""
-    # If summary payload exists, prefer summary layout
+    """OUTRO – light bg, vertically centered title, bottom-right logo."""
     if _as_lines(slide.get("summary_list") or slide.get("body_points") or []):
         return _render_summary(
             base, slide, brand_color=brand_color, logo=logo, scale=scale
@@ -895,31 +932,30 @@ def _render_outro(
             max_width=max_w,
             base_size=OUTRO_TITLE_BASE,
             scale=scale,
-            weight="black",
-            min_size=64,
+            weight="medium",
+            min_size=52,
         )
         prepared.append((clean, font))
 
-    gap = int(18 * scale)
+    gap = int(14 * scale)
     stack_h = sum(_text_height(t, f) for t, f in prepared) + gap * max(0, len(prepared) - 1)
-    y = max(int(h * 0.30), (h - stack_h) // 2 - 80 * scale)
-    left_nudge = int(w * 0.08)
+    y = max(int(h * 0.28), (h - stack_h) // 2)
 
     for clean, font in prepared:
         plain = _plain_from_emphasis(clean)
         left, top, right, bottom = _text_bbox(plain, font)
         tw = right - left
-        x = (w - tw) // 2 - left_nudge - left
-        draw.text((x, y - top), plain, fill=PURE_WHITE, font=font)
+        x = (w - tw) // 2 - left
+        draw.text((x, y - top), plain, fill=INK, font=font)
         y += (bottom - top) + gap
 
     sub = _clean_display(str(slide.get("category_tag") or slide.get("badge_text") or ""))
     if sub:
-        sfont = _font(28 * scale, weight="medium")
+        sfont = _font(26 * scale, weight="regular")
         left, top, right, bottom = _text_bbox(sub, sfont)
         tw = right - left
-        x = (w - tw) // 2 - left_nudge - left
-        draw.text((x, y + 20 * scale - top), sub, fill=SOFT_WHITE, font=sfont)
+        x = (w - tw) // 2 - left
+        draw.text((x, y + 16 * scale - top), sub, fill=INK_SOFT, font=sfont)
 
     draw_logo(base, scale=scale, position="bottom_right", brand_name=logo)
     return base
@@ -979,13 +1015,13 @@ def render_slide_pil(
             ig_handle=ig_handle,
         )
     elif slide_type == "SUMMARY":
-        base = Image.new("RGB", (w, h), BG_DARK)
+        base = Image.new("RGB", (w, h), BG_LIGHT)
         img = _render_summary(base, slide, brand_color=color, logo=logo, scale=scale)
     elif slide_type == "OUTRO":
-        base = Image.new("RGB", (w, h), BG_DARK)
+        base = Image.new("RGB", (w, h), BG_LIGHT)
         img = _render_outro(base, slide, brand_color=color, logo=logo, scale=scale)
     else:
-        base = Image.new("RGB", (w, h), BG_DARK)
+        base = Image.new("RGB", (w, h), BG_LIGHT)
         img = _render_content(base, slide, brand_color=color, logo=logo, scale=scale)
 
     img.save(output_path, format="PNG", optimize=True)
