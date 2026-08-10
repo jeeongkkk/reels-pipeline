@@ -913,6 +913,13 @@ elif page == "🎥 새 릴스 제작":
                 }
                 st.session_state["selected_project"] = project_dir.name
                 st.rerun()
+            except ModuleNotFoundError as exc:
+                missing = getattr(exc, "name", None) or str(exc)
+                st.error(
+                    f"생성 실패: `{missing}` 패키지가 없습니다. "
+                    "로컬은 `pip install moviepy imageio-ffmpeg` 후 앱을 재시작하세요. "
+                    "Streamlit Cloud라면 `requirements.txt` 반영 후 재배포가 필요합니다."
+                )
             except Exception as exc:  # noqa: BLE001
                 st.error(f"생성 실패: {exc}")
 
@@ -951,6 +958,13 @@ elif page == "🎥 새 릴스 제작":
                 }
                 st.session_state["selected_project"] = project_dir.name
                 st.rerun()
+            except ModuleNotFoundError as exc:
+                missing = getattr(exc, "name", None) or str(exc)
+                st.error(
+                    f"생성 실패: `{missing}` 패키지가 없습니다. "
+                    "로컬은 `pip install moviepy imageio-ffmpeg` 후 앱을 재시작하세요. "
+                    "Streamlit Cloud라면 `requirements.txt` 반영 후 재배포가 필요합니다."
+                )
             except Exception as exc:  # noqa: BLE001
                 st.error(f"생성 실패: {exc}")
 
