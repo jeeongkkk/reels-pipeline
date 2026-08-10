@@ -1,6 +1,10 @@
 # B2B 컨설팅 / 마케팅 Authority 브랜드 가이드
 # Module 2 (대본), Module 5 (자막·비주얼)에서 참조합니다.
 
+profile:
+  id: withchoyool
+  content_mode: b2b_insight
+
 brand:
   name: "WITHCHOYOOL"
   tagline: "BUSINESS STUDIO"
@@ -138,10 +142,34 @@ production:
 # ── Card news (B2B high-end PNG) ─────────────────────────────
 card_news:
   brand_color: "#fc4d01"       # WITHCHOYOOL brand orange
+  highlight_color: "#fc4d01"   # body *emphasis* default (can differ from box)
   highlight_mode: "box"
   font_family: "Pretendard"
   brand_name: "WITHCHOYOOL"
+  ig_handle: "@with.choyool"
   slides_min: 6
   slides_max: 8
   device_scale_factor: 2       # 1080×1440 viewport → 2160×2880 PNG
   output: "png_zip"            # MoviePy removed from card path
+  color_palette:
+    - {id: signature, label: "시그니처 주황", box: "#FC4D01", highlight: "#FC4D01"}
+    - {id: coral_gold, label: "코랄 + 골드", box: "#FF6B4A", highlight: "#E8B923"}
+    - {id: navy_amber, label: "네이비 + 앰버", box: "#1B3A5F", highlight: "#F59E0B"}
+    - {id: charcoal_orange, label: "차콜 + 주황", box: "#2D2A26", highlight: "#FC4D01"}
+    - {id: teal_coral, label: "틸 + 코랄", box: "#0F766E", highlight: "#FF7A59"}
+  outro_title_lines:
+    - "당신의"
+    - "전략 기획실이"
+    - "되어드립니다."
+  outro_highlight: "전략 기획실"
+  outro_subtitle: "단 하나의 실전 비즈니스 인사이트, 위드조율"
+
+planner:
+  audience: "중소기업 실무자·대표·B2B 마케터"
+  role_title: "탑티어 B2B 마케터이자 인사이트 컨설턴트"
+  safety: >
+    근거 없는 단정·경쟁사 비하 금지. 숫자·기한·실행 액션 중심.
+  cover_image_prompt: >
+    English UGC iPhone everyday snap – messy desk with receipts/coffee,
+    hand holding a phone, natural back view, candid commute, crumpled papers.
+    Ban glamorous portraits, studio lighting, cinematic/commercial looks.

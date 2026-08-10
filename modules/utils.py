@@ -81,9 +81,18 @@ def get_settings() -> Settings:
 
 
 def load_brand_config(path: Path | None = None) -> dict[str, Any]:
-    config_path = path or (ROOT_DIR / "config" / "brand.yaml")
+    """Load active brand YAML (WITHCHOYOOL / BebeSkin / explicit path)."""
+    if path is None:
+        try:
+            from modules.brand_profiles import brand_config_path
+
+            config_path = brand_config_path()
+        except Exception:  # noqa: BLE001
+            config_path = ROOT_DIR / "config" / "brand.yaml"
+    else:
+        config_path = Path(path)
     with open(config_path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return yaml.safe_load(f) or {}
 
 
 def get_logger(name: str) -> logging.Logger:

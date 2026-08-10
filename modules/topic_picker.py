@@ -34,7 +34,8 @@ class TopicCategory:
     topic_prefix: str  # used when shaping final topic string
 
 
-CATEGORIES: tuple[TopicCategory, ...] = (
+# ── WITHCHOYOOL (B2B) ────────────────────────────────────────
+CATEGORIES_WITHCHOYOOL: tuple[TopicCategory, ...] = (
     TopicCategory(
         id="gov_support",
         label="정부지원 · 정책",
@@ -126,6 +127,138 @@ CATEGORIES: tuple[TopicCategory, ...] = (
 )
 
 
+# ── BebeSkin (아기 피부) ─────────────────────────────────────
+CATEGORIES_BEBESKIN: tuple[TopicCategory, ...] = (
+    TopicCategory(
+        id="baby_moisturize",
+        label="보습 · 목욕 루틴",
+        description="영유아 보습·목욕·세안·피부장벽 케어 팁",
+        search_queries=(
+            "영유아 보습제 사용법",
+            "아기 목욕 보습 루틴",
+            "신생아 피부 보습",
+            "아기 피부장벽 관리",
+            "유아 로션 고르는 법",
+            f"{CURRENT_YEAR} 아기 보습 케어",
+        ),
+        must_match=("보습", "목욕", "로션", "크림", "피부", "아기", "영아", "유아", "신생아", "장벽"),
+        topic_prefix="아기 보습·목욕 루틴",
+    ),
+    TopicCategory(
+        id="sensitive_atopy_care",
+        label="민감 · 건조 피부 관찰",
+        description="민감·건조·아토피 성향 관찰(진단 단정 없이 케어·기록)",
+        search_queries=(
+            "영유아 아토피 피부 관리",
+            "아기 건조 피부 보습",
+            "유아 민감성 피부 케어",
+            "아기 피부 발진 관찰",
+            "소아 피부 가려움 관리",
+            "영아 피부염 예방 보습",
+        ),
+        must_match=("아토피", "건조", "민감", "발진", "가려움", "피부염", "아기", "영아", "유아", "보습"),
+        topic_prefix="민감·건조 피부 관찰 팁",
+    ),
+    TopicCategory(
+        id="seasonal_baby_skin",
+        label="계절별 피부 케어",
+        description="환절기·여름·겨울 아기 피부 관리",
+        search_queries=(
+            "환절기 아기 피부 관리",
+            "겨울 영아 건조 피부",
+            "여름 아기 땀 땀",
+            "미세먼지 아기 피부",
+            "에어컨 아기 피부 건조",
+            f"{CURRENT_YEAR} 계절 아기 피부",
+        ),
+        must_match=("환절기", "겨울", "여름", "땀", "건조", "미세먼지", "아기", "영아", "피부", "보습"),
+        topic_prefix="계절별 아기 피부 케어",
+    ),
+    TopicCategory(
+        id="newborn_skin_change",
+        label="신생아 · 피부 변화",
+        description="신생아 피부 특징·생리적 변화·관찰 포인트",
+        search_queries=(
+            "신생아 피부 특징",
+            "신생아 황달 관찰",
+            "신생아 발진 생리적",
+            "신생아 피부 각질",
+            "영아 피부색 변화",
+            "신생아 피부 관리 기본",
+        ),
+        must_match=("신생아", "영아", "피부", "발진", "각질", "황달", "관찰", "생리"),
+        topic_prefix="신생아 피부 변화 관찰",
+    ),
+    TopicCategory(
+        id="clinic_prep_record",
+        label="진료 전 기록 · 체크",
+        description="소아과 방문 전 사진·증상·루틴 정리 팁",
+        search_queries=(
+            "소아과 진료 준비 체크리스트",
+            "아기 피부 사진 기록 방법",
+            "소아과 증상 일지",
+            "영유아 진료 전 준비",
+            "아기 피부 경과 기록",
+            "보호자 진료 설명 팁",
+        ),
+        must_match=("소아과", "진료", "기록", "체크", "증상", "경과", "사진", "보호자", "아기"),
+        topic_prefix="진료 전 기록 체크리스트",
+    ),
+    TopicCategory(
+        id="environment_routine",
+        label="환경 · 세제 · 옷",
+        description="실내습도·세제·옷감 등 환경 요인이 피부에 미치는 영향",
+        search_queries=(
+            "아기 실내습도 피부",
+            "유아 세제 고르는 법",
+            "아기 옷감 피부 자극",
+            "기저귀 발진 예방 관리",
+            "영아 세탁세제 순한",
+            "아기 침구 피부 케어",
+        ),
+        must_match=("습도", "세제", "옷", "기저귀", "세탁", "환경", "아기", "영아", "피부", "자극"),
+        topic_prefix="환경·세제·옷과 아기 피부",
+    ),
+)
+
+
+# Back-compat alias
+CATEGORIES = CATEGORIES_WITHCHOYOOL
+
+_MEDICAL_HARD_CLAIM = re.compile(
+    r"완치|특효|만병통치|치료제\s*추천|약\s*처방|자가\s*치료|진단\s*확정|"
+    r"반드시\s*치료|병원\s*가지\s*마|약\s*대신",
+)
+
+
+def _categories_for_brand(brand_id: str | None = None) -> tuple[TopicCategory, ...]:
+    try:
+        from modules.brand_profiles import get_active_brand_id
+
+        bid = (brand_id or get_active_brand_id() or "withchoyool").lower()
+    except Exception:  # noqa: BLE001
+        bid = (brand_id or "withchoyool").lower()
+    if bid == "bebeskin":
+        return CATEGORIES_BEBESKIN
+    return CATEGORIES_WITHCHOYOOL
+
+
+def list_categories(brand_id: str | None = None) -> list[TopicCategory]:
+    return list(_categories_for_brand(brand_id))
+
+
+def get_category(category_id: str, brand_id: str | None = None) -> TopicCategory | None:
+    for c in _categories_for_brand(brand_id):
+        if c.id == category_id or c.label == category_id:
+            return c
+    # Cross-brand lookup as fallback
+    for pool in (CATEGORIES_WITHCHOYOOL, CATEGORIES_BEBESKIN):
+        for c in pool:
+            if c.id == category_id or c.label == category_id:
+                return c
+    return None
+
+
 @dataclass
 class TopicCandidate:
     topic: str
@@ -156,17 +289,6 @@ class TopicPickResult:
             "article_count": self.article_count,
             "query_used": self.query_used,
         }
-
-
-def list_categories() -> list[TopicCategory]:
-    return list(CATEGORIES)
-
-
-def get_category(category_id: str) -> TopicCategory | None:
-    for c in CATEGORIES:
-        if c.id == category_id or c.label == category_id:
-            return c
-    return None
 
 
 def _clean_headline(title: str) -> str:
@@ -244,12 +366,34 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
         return -1.0
     if re.search(r"허위|과장광고|송치|사기|피의자|야동|주소콘", blob):
         return -1.0
+    if _MEDICAL_HARD_CLAIM.search(blob):
+        return -1.0
 
     hits = sum(1 for k in category.must_match if k.lower() in low or k in blob)
     if hits == 0:
         return 0.0
 
     score = 1.0 + hits * 1.2
+
+    # BebeSkin: boost observation/care language, soft-penalize hard medical product ads
+    try:
+        from modules.brand_profiles import get_active_brand_id
+
+        is_bebe = get_active_brand_id() == "bebeskin"
+    except Exception:  # noqa: BLE001
+        is_bebe = category.id in {
+            "baby_moisturize",
+            "sensitive_atopy_care",
+            "seasonal_baby_skin",
+            "newborn_skin_change",
+            "clinic_prep_record",
+            "environment_routine",
+        }
+    if is_bebe:
+        if re.search(r"관찰|기록|보습|루틴|체크|비교|소아과|보호자", blob):
+            score += 1.2
+        if re.search(r"광고|공동구매|최저가|할인코드|협찬", blob):
+            score -= 1.5
 
     # Freshness by year mention
     years = {int(y) for y in re.findall(r"(20\d{2})", blob)}
@@ -278,9 +422,9 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
         score -= 0.3
 
     # Concrete signals that make good card-news topics
-    if re.search(r"\d+(?:\.\d+)?(?:억|조|만|%|원)", blob):
+    if re.search(r"\d+(?:\.\d+)?(?:억|조|만|%|원|도|시간|분|회)", blob):
         score += 1.5
-    if re.search(r"공고|선정|모집|발표|확대|도입|규제|지원", blob):
+    if re.search(r"공고|선정|모집|발표|확대|도입|규제|지원|보습|관찰|체크|루틴|케어", blob):
         score += 0.8
 
     # Prefer headlines long enough to be specific

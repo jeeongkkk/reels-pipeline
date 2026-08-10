@@ -1186,7 +1186,18 @@ async def generate_card_script(
 ) -> CardScriptResult:
     settings = get_settings()
     brand = load_brand_config()
-    ref_block = reference.summary_for_prompt() if reference else "B2B card news"
+    from modules.brand_profiles import content_mode_from_brand
+
+    ref_block = (
+        reference.summary_for_prompt()
+        if reference
+        else (
+            "baby skin observation card news"
+            if content_mode_from_brand(brand) == "parenting_care"
+            else "B2B card news"
+        )
+    )
+
     logo = brand.get("brand", {}).get("name", "Authority")
 
     # ── Chain step 1: live web search BEFORE LLM ─────────────

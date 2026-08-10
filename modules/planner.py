@@ -171,6 +171,32 @@ def editorial_hook_body(fact: str, index: int, *, topic: str = "") -> tuple[str,
 
 
 def build_planner_system_message() -> str:
+    from modules.brand_profiles import content_mode_from_brand
+    from modules.utils import load_brand_config
+
+    brand = load_brand_config()
+    mode = content_mode_from_brand(brand)
+    planner = brand.get("planner") or {}
+    safety = str(planner.get("safety") or "").strip()
+    cover_prompt = str(planner.get("cover_image_prompt") or "").strip()
+    role = str(planner.get("role_title") or "콘텐츠 에디터")
+    audience = str(planner.get("audience") or "독자")
+
+    if mode == "parenting_care":
+        return (
+            f"You are a {role} writing Korean Instagram insight carousels "
+            f"for {audience}. "
+            "Exactly 7 slides: COVER->PROBLEM->SOLUTION->BENEFIT->ACTION->INSIGHT->SUMMARY. "
+            "Focus on observation, moisturizing, photo logging, clinic prep. "
+            "NEVER diagnose, prescribe, claim cures, or replace pediatric advice. "
+            f"Safety: {safety or 'No medical diagnosis/treatment claims.'} "
+            "FORBIDDEN fluff and prose paragraphs. Use short noun-style fragments. "
+            "No periods. content_variant A/B rules same as B2B carousel. "
+            "image_prompt ONLY on COVER: "
+            + (cover_prompt or "soft home caregiving UGC, no graphic rash")
+            + " Return ONLY valid JSON."
+        )
+
     return (
         "You are a top-tier B2B marketer and insight consultant writing Korean "
         "Instagram insight carousels for SME owners and operators. "
@@ -219,9 +245,49 @@ def build_planner_prompt(
         for r in SLIDE_ROLES
     )
 
+    from modules.brand_profiles import content_mode_from_brand
+    from modules.utils import load_brand_config
+
+    brand = load_brand_config()
+    mode = content_mode_from_brand(brand)
+    planner = brand.get("planner") or {}
+    role = str(planner.get("role_title") or "탑티어 B2B 마케터이자 인사이트 컨설턴트")
+    audience = str(planner.get("audience") or "중소기업 실무자·대표")
+    safety = str(planner.get("safety") or "").strip()
+
+    if mode == "parenting_care":
+        return f"""## 역할
+당신은 **{role}**다.
+독자는 **{audience}**. 의료 진단자가 아니다.
+관찰·보습·기록·진료 보조를 짧고 따뜻하게 말한다.
+
+## 안전 규칙
+{safety or "진단·처방·특효·완치 단정 금지. 이상 시 소아과 상담 권유."}
+
+## 주제
+{topic}
+
+## 스크랩 팩트 (근거로만 사용, 제목 복붙 금지)
+{facts_block}
+
+추가:
+{extra}
+
+{f"참고: {reference_block}" if reference_block else ""}
+
+## 스토리텔링 구조 (절대 순서 고정)
+| 장 | phase | tag | layout | 역할 |
+{roles_table}
+
+COVER는 3줄 훅(공포 마케팅 금지). PROBLEM=관찰 어려움, SOLUTION=기록/구도/루틴,
+BENEFIT=비교·진료 설명 이득, ACTION=오늘 할 체크, INSIGHT=과장 없는 해석,
+SUMMARY=실행 체크 3~4개. 마침표와 ~습니다 금지. JSON만 출력.
+현재 연도: {current_year_label}
+"""
+
     return f"""## 역할
-당신은 **탑티어 B2B 마케터이자 인사이트 컨설턴트**다.
-독자는 **중소기업 실무자·대표**. 보도자료 요약자가 아니다.
+당신은 **{role}**다.
+독자는 **{audience}**. 보도자료 요약자가 아니다.
 팩트를 재료로 쓰되, **직접 말하듯(Direct address)** 뼈를 때리는 단문으로 쓴다.
 
 ## 주제

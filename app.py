@@ -202,26 +202,72 @@ def _show_card_gallery(
 
 
 # ── Sidebar nav ──────────────────────────────────────────────
+from modules.brand_profiles import (
+    get_active_brand_id,
+    list_brand_profiles,
+    set_active_brand,
+)
+
 st.sidebar.title("Authority Reels")
-st.sidebar.caption(brand.get("brand", {}).get("tagline", "Local Studio"))
+profiles = list_brand_profiles()
+profile_labels = {p.id: p.label for p in profiles}
+current_id = st.session_state.get("brand_profile_id") or get_active_brand_id()
+if current_id not in profile_labels:
+    current_id = "withchoyool"
+selected_profile_id = st.sidebar.selectbox(
+    "브랜드 프로필",
+    options=list(profile_labels.keys()),
+    format_func=lambda i: profile_labels[i],
+    index=list(profile_labels.keys()).index(current_id),
+    help="WITHCHOYOOL 비즈니스 / BebeSkin 아기 피부 콘텐츠",
+)
+if selected_profile_id != st.session_state.get("brand_profile_id"):
+    st.session_state["brand_profile_id"] = selected_profile_id
+    # Reset topic preview when brand switches
+    for k in ("topic_preview", "topic_choice", "topic_preview_cat", "topic_choice_radio"):
+        st.session_state.pop(k, None)
+set_active_brand(selected_profile_id)
+brand = load_brand_config()  # reload after profile switch
+ref_defaults = brand.get("reference", {})
+cn_defaults = brand.get("card_news") or {}
+active_brand_name = (
+    cn_defaults.get("brand_name")
+    or (brand.get("brand") or {}).get("name")
+    or "WITHCHOYOOL"
+)
+active_brand_color = str(cn_defaults.get("brand_color") or "#fc4d01")
+active_ig = str(cn_defaults.get("ig_handle") or "")
+st.sidebar.caption(
+    (brand.get("brand") or {}).get("tagline")
+    or brand.get("brand", {}).get("tagline", "Local Studio")
+)
+
 page = st.sidebar.radio(
     "메뉴",
-    ["🎬 새 제작", "📁 프로젝트", "📈 Analytics", "⚙️ 설정"],
+    ["🎬 새 제작", "🎥 새 릴스 제작", "📁 프로젝트", "📈 Analytics", "⚙️ 설정"],
     label_visibility="collapsed",
 )
 
 st.sidebar.divider()
 st.sidebar.markdown(f"**Publish:** `{settings.publish_mode}`")
+st.sidebar.caption(f"활성 브랜드: **{active_brand_name}**")
 _render_api_status_sidebar()
 
 # ── Page: Create ─────────────────────────────────────────────
 if page == "🎬 새 제작":
     st.title("새 카드뉴스 제작")
-    st.caption("카테고리 선택 → 그 안에서 주제 자동 선정 → 레티나 PNG + ZIP")
+    is_bebe = selected_profile_id == "bebeskin"
+    if is_bebe:
+        st.caption(
+            f"{active_brand_name} · 아기 피부 카테고리 자동 스크랩 → 레티나 PNG + ZIP "
+            "(진단·처방 단정 없이 관찰·보습·기록 톤)"
+        )
+    else:
+        st.caption("카테고리 선택 → 그 안에서 주제 자동 선정 → 레티나 PNG + ZIP")
 
     from modules.topic_picker import list_categories
 
-    categories = list_categories()
+    categories = list_categories(selected_profile_id)
     cat_labels = [c.label for c in categories]
     cat_by_label = {c.label: c for c in categories}
 
@@ -317,9 +363,14 @@ if page == "🎬 새 제작":
             else:
                 st.caption("아직 후보가 없습니다. 「주제 후보 불러오기」를 눌러 주세요.")
 
+        audience_opts = (
+            ["영유아 보호자", "육아 초보 부모", "소아과 방문 전 보호자", "일반"]
+            if is_bebe
+            else ["B2B 마케터", "스타트업 창업자", "마케팅 대행사", "일반"]
+        )
         audience = st.selectbox(
             "타겟",
-            ["B2B 마케터", "스타트업 창업자", "마케팅 대행사", "일반"],
+            audience_opts,
         )
         tone = st.selectbox("톤", ["brand default", "casual", "semi-formal", "formal"])
         mode = st.radio(
@@ -331,31 +382,186 @@ if page == "🎬 새 제작":
         )
 
         use_tts = False
-        brand_color = "#fc4d01"
+        brand_color = active_brand_color
+        body_highlight_color = active_brand_color
         highlight_mode = "color"
         make_video = False
         draft_mode = False
+        type_style = None
         if mode == ProductionMode.CARD_NEWS:
             st.markdown("**카드뉴스 옵션**")
-            brand_color = st.color_picker(
-                "브랜드 포인트 컬러 (표지·소제목 박스)",
-                value="#fc4d01",
+            from modules.brand_colors import (
+                default_box_color,
+                default_highlight_color,
+                palettes_for_brand,
             )
+            from modules.typography import (
+                FONT_FAMILIES,
+                FONT_WEIGHTS,
+                default_type_style_for_brand,
+            )
+
+            # Reset colors when brand profile changes
+            palette_brand_key = f"palette_for_{selected_profile_id}"
+            if st.session_state.get("palette_brand_key") != palette_brand_key:
+                st.session_state["palette_brand_key"] = palette_brand_key
+                st.session_state["card_box_color"] = default_box_color(brand)
+                st.session_state["card_highlight_color"] = default_highlight_color(brand)
+                st.session_state["card_palette_id"] = ""
+
+            if "card_box_color" not in st.session_state:
+                st.session_state["card_box_color"] = default_box_color(brand)
+            if "card_highlight_color" not in st.session_state:
+                st.session_state["card_highlight_color"] = default_highlight_color(brand)
+
+            st.markdown("**추천 팔레트** (탭하면 표지 박스 / 본문 강조에 바로 적용)")
+            swatches = palettes_for_brand(brand)
+            chip_cols = st.columns(min(5, max(1, len(swatches))))
+            for i, sw in enumerate(swatches):
+                with chip_cols[i % len(chip_cols)]:
+                    active = st.session_state.get("card_palette_id") == sw.id
+                    label = f"{'● ' if active else ''}{sw.label}"
+                    if st.button(
+                        label,
+                        key=f"palette_chip_{selected_profile_id}_{sw.id}",
+                        use_container_width=True,
+                        help=f"박스 {sw.box} · 강조 {sw.highlight}",
+                    ):
+                        st.session_state["card_box_color"] = sw.box
+                        st.session_state["card_highlight_color"] = sw.highlight
+                        st.session_state["card_palette_id"] = sw.id
+                        st.rerun()
+                    st.markdown(
+                        f'<div style="display:flex;gap:4px;margin:-0.35rem 0 0.6rem 0;">'
+                        f'<div style="flex:1;height:8px;border-radius:4px;background:{sw.box};"></div>'
+                        f'<div style="flex:1;height:8px;border-radius:4px;background:{sw.highlight};"></div>'
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            c_box, c_hi = st.columns(2)
+            with c_box:
+                brand_color = st.color_picker(
+                    "표지·소제목 박스 색",
+                    key="card_box_color",
+                )
+            with c_hi:
+                body_highlight_color = st.color_picker(
+                    "본문 강조(*별표*) 색",
+                    key="card_highlight_color",
+                )
+            matched = next(
+                (
+                    s
+                    for s in swatches
+                    if s.box.upper() == str(brand_color).upper()
+                    and s.highlight.upper() == str(body_highlight_color).upper()
+                ),
+                None,
+            )
+            st.session_state["card_palette_id"] = matched.id if matched else ""
+
             highlight_mode = "box"
+            typo_default = default_type_style_for_brand(brand)
+            fam_keys = list(FONT_FAMILIES.keys())
+            weight_keys = list(FONT_WEIGHTS.keys())
+            c_font, c_title, c_body = st.columns(3)
+            with c_font:
+                font_family = st.selectbox(
+                    "글씨체",
+                    fam_keys,
+                    index=fam_keys.index(typo_default.family)
+                    if typo_default.family in fam_keys
+                    else 0,
+                    format_func=lambda k: FONT_FAMILIES[k],
+                    key="card_font_family",
+                )
+            with c_title:
+                title_weight = st.selectbox(
+                    "제목 굵기 (표지·소제목·아웃트로)",
+                    weight_keys,
+                    index=weight_keys.index(typo_default.title_weight)
+                    if typo_default.title_weight in weight_keys
+                    else weight_keys.index("extrabold"),
+                    format_func=lambda k: FONT_WEIGHTS[k],
+                    key="card_title_weight",
+                )
+            with c_body:
+                body_weight = st.selectbox(
+                    "본문 굵기",
+                    weight_keys,
+                    index=weight_keys.index(typo_default.body_weight)
+                    if typo_default.body_weight in weight_keys
+                    else weight_keys.index("regular"),
+                    format_func=lambda k: FONT_WEIGHTS[k],
+                    key="card_body_weight",
+                )
+            with st.expander("타이포 상세 (워드마크·핸들·서브)", expanded=False):
+                w1, w2, w3 = st.columns(3)
+                with w1:
+                    wordmark_weight = st.selectbox(
+                        "워드마크 굵기",
+                        weight_keys,
+                        index=weight_keys.index(typo_default.wordmark_weight)
+                        if typo_default.wordmark_weight in weight_keys
+                        else weight_keys.index("bold"),
+                        format_func=lambda k: FONT_WEIGHTS[k],
+                        key="card_wordmark_weight",
+                    )
+                with w2:
+                    handle_weight = st.selectbox(
+                        "IG 핸들 굵기",
+                        weight_keys,
+                        index=weight_keys.index(typo_default.handle_weight)
+                        if typo_default.handle_weight in weight_keys
+                        else weight_keys.index("medium"),
+                        format_func=lambda k: FONT_WEIGHTS[k],
+                        key="card_handle_weight",
+                    )
+                with w3:
+                    sub_weight = st.selectbox(
+                        "서브/출처 굵기",
+                        weight_keys,
+                        index=weight_keys.index(typo_default.sub_weight)
+                        if typo_default.sub_weight in weight_keys
+                        else weight_keys.index("regular"),
+                        format_func=lambda k: FONT_WEIGHTS[k],
+                        key="card_sub_weight",
+                    )
+            type_style = {
+                "family": font_family,
+                "title_weight": title_weight,
+                "body_weight": body_weight,
+                "wordmark_weight": wordmark_weight,
+                "handle_weight": handle_weight,
+                "sub_weight": sub_weight,
+            }
             st.caption(
-                "표지 IG 고정: @with.choyool · 본문: #fafafa + WITHCHOYOOL 로고 · "
-                "포인트 컬러 기본 #fc4d01"
+                f"표지 IG: {active_ig or '@…'} · 워드마크: {active_brand_name} · "
+                f"박스 {brand_color} · 본문강조 {body_highlight_color} · "
+                f"{FONT_FAMILIES.get(font_family, font_family)} / "
+                f"제목 {FONT_WEIGHTS.get(title_weight, title_weight)} · "
+                f"본문 {FONT_WEIGHTS.get(body_weight, body_weight)}"
             )
         else:
             use_tts = True
+            type_style = None
+            body_highlight_color = ""
         with st.expander("📋 스크랩 직접 입력 (선택)", expanded=False):
             custom_scrap = st.text_area(
                 "내용 붙여넣기 (한 줄에 하나의 팩트·기사 요약·URL)",
                 placeholder=(
                     "예:\n"
-                    "중소기업 기술보호 바우처 최대 5000만원 지원\n"
-                    "신청기간 2026.8.1~8.31\n"
-                    "https://www.mss.go.kr/site/smba/ex/..."
+                    "목욕 후 3분 이내 보습이 피부장벽에 도움\n"
+                    "동일 구도 사진으로 경과 비교\n"
+                    "https://…"
+                    if is_bebe
+                    else (
+                        "예:\n"
+                        "중소기업 기술보호 바우처 최대 5000만원 지원\n"
+                        "신청기간 2026.8.1~8.31\n"
+                        "https://www.mss.go.kr/site/smba/ex/..."
+                    )
                 ),
                 height=120,
                 key="custom_scrap_input",
@@ -456,7 +662,9 @@ if page == "🎬 새 제작":
                         make_video=make_video,
                         category_id=category.id if use_auto else None,
                         custom_facts=user_facts or None,
-                        ig_handle="",
+                        ig_handle=active_ig,
+                        type_style=type_style,
+                        highlight_color=body_highlight_color or brand_color,
                     )
                 )
                 progress.progress(100, text="완료")
@@ -533,6 +741,218 @@ if page == "🎬 새 제작":
                 )
         else:
             st.info("왼쪽에서 제작을 실행하면 여기에 카드 PNG가 표시됩니다.")
+
+# ── Page: New Reels (independent from card-news) ─────────────
+elif page == "🎥 새 릴스 제작":
+    st.title("새 릴스 제작")
+    st.caption(
+        f"{active_brand_name} · 텍스트 꿀팁 릴스 · 포트폴리오 쇼케이스 · 1080×1920 MP4"
+    )
+
+    reel_kind = st.radio(
+        "릴스 유형",
+        ["정보성 텍스트 릴스", "포트폴리오 쇼케이스"],
+        horizontal=True,
+    )
+
+    run_tips = False
+    run_folio = False
+    tip_title = tip1 = tip2 = tip3 = tip4 = ""
+    bg_hex = "#111111"
+    tip_interval = 1.5
+    duration_sec = 12.0
+    reel_font_family = "pretendard"
+    reel_title_weight = "bold"
+    reel_body_weight = "semibold"
+    folio_title = "portfolio"
+    folio_images = None
+    per_image = 3.6
+    crossfade = 0.85
+    bgm_file = None
+
+    col_form, col_preview = st.columns([1.1, 1])
+
+    with col_form:
+        if reel_kind == "정보성 텍스트 릴스":
+            tip_title = st.text_input(
+                "제목 *",
+                placeholder="예: B2B 마케터가 놓치는 3가지",
+                key="reel_tip_title",
+            )
+            tip1 = st.text_input("꿀팁 1 *", key="reel_tip_1", placeholder="첫 번째 핵심 포인트")
+            tip2 = st.text_input("꿀팁 2 *", key="reel_tip_2", placeholder="두 번째 핵심 포인트")
+            tip3 = st.text_input("꿀팁 3 *", key="reel_tip_3", placeholder="세 번째 핵심 포인트")
+            tip4 = st.text_input("꿀팁 4 (선택)", key="reel_tip_4", placeholder="네 번째 포인트")
+            bg_hex = st.text_input(
+                "배경색 (HEX)",
+                value="#1F3D34" if selected_profile_id == "bebeskin" else "#111111",
+                key="reel_tip_bg",
+            )
+            tip_interval = st.slider("텍스트 등장 간격(초)", 1.0, 2.0, 1.5, 0.1, key="reel_tip_gap")
+            duration_sec = st.slider("영상 길이(초)", 10.0, 15.0, 12.0, 0.5, key="reel_tip_dur")
+            from modules.typography import FONT_FAMILIES, FONT_WEIGHTS
+
+            fam_keys = list(FONT_FAMILIES.keys())
+            weight_keys = list(FONT_WEIGHTS.keys())
+            rf1, rf2, rf3 = st.columns(3)
+            with rf1:
+                reel_font_family = st.selectbox(
+                    "글씨체",
+                    fam_keys,
+                    index=0,
+                    format_func=lambda k: FONT_FAMILIES[k],
+                    key="reel_font_family",
+                )
+            with rf2:
+                reel_title_weight = st.selectbox(
+                    "제목 굵기",
+                    weight_keys,
+                    index=weight_keys.index("bold"),
+                    format_func=lambda k: FONT_WEIGHTS[k],
+                    key="reel_title_weight",
+                )
+            with rf3:
+                reel_body_weight = st.selectbox(
+                    "본문 굵기",
+                    weight_keys,
+                    index=weight_keys.index("semibold"),
+                    format_func=lambda k: FONT_WEIGHTS[k],
+                    key="reel_body_weight",
+                )
+            bgm_file = st.file_uploader(
+                "BGM 업로드 (mp3/wav, 선택)",
+                type=["mp3", "wav", "m4a", "aac"],
+                key="reel_tip_bgm",
+            )
+            run_tips = st.button(
+                "텍스트 릴스 생성",
+                type="primary",
+                use_container_width=True,
+                key="reel_tip_run",
+            )
+        else:
+            folio_title = st.text_input(
+                "프로젝트 이름",
+                value="portfolio",
+                key="reel_folio_title",
+                help="저장 폴더 이름에만 사용됩니다.",
+            )
+            folio_images = st.file_uploader(
+                "포트폴리오 이미지 (PNG/JPG, 다중)",
+                type=["png", "jpg", "jpeg", "webp"],
+                accept_multiple_files=True,
+                key="reel_folio_imgs",
+            )
+            per_image = st.slider("이미지당 길이(초)", 2.5, 5.0, 3.6, 0.1, key="reel_folio_sec")
+            crossfade = st.slider("디졸브(초)", 0.4, 1.2, 0.85, 0.05, key="reel_folio_xfade")
+            bgm_file = st.file_uploader(
+                "BGM 업로드 (mp3/wav, 선택)",
+                type=["mp3", "wav", "m4a", "aac"],
+                key="reel_folio_bgm",
+            )
+            run_folio = st.button(
+                "포트폴리오 릴스 생성",
+                type="primary",
+                use_container_width=True,
+                key="reel_folio_run",
+            )
+
+        st.caption("MoviePy + FFmpeg · 생성 시간은 이미지/길이에 따라 수십 초~수 분")
+
+    with col_preview:
+        result = st.session_state.get("reel_result")
+        if result and Path(result.get("path", "")).exists():
+            out_path = Path(result["path"])
+            st.success(result.get("message", "생성 완료"))
+            st.video(str(out_path))
+            st.caption(f"`{out_path.parent.name}` · {out_path.stat().st_size / (1024 * 1024):.1f} MB")
+            st.download_button(
+                "MP4 다운로드",
+                data=out_path.read_bytes(),
+                file_name=out_path.name,
+                mime="video/mp4",
+                use_container_width=True,
+                key="reel_dl",
+            )
+        else:
+            st.info("왼쪽에서 옵션을 넣고 생성하면 여기에 미리보기가 표시됩니다.")
+
+    # ── Run handlers (outside columns to avoid nested layout glitches) ──
+    if reel_kind == "정보성 텍스트 릴스" and run_tips:
+        tips = [t for t in [tip1, tip2, tip3, tip4] if (t or "").strip()]
+        if not (tip_title or "").strip():
+            st.error("제목을 입력하세요.")
+        elif len(tips) < 3:
+            st.error("꿀팁을 3개 이상 입력하세요.")
+        else:
+            try:
+                from modules.reels_maker import create_reels_project, make_text_tips_reel
+
+                project_dir = create_reels_project("tips", tip_title)
+                bgm_path = None
+                if bgm_file is not None:
+                    bgm_path = project_dir / f"bgm{Path(bgm_file.name).suffix.lower()}"
+                    bgm_path.write_bytes(bgm_file.getvalue())
+                out = project_dir / "final_reel.mp4"
+                with st.spinner("텍스트 릴스 렌더링 중…"):
+                    make_text_tips_reel(
+                        title=tip_title.strip(),
+                        tips=tips,
+                        bg_color=bg_hex or "#111111",
+                        bgm_path=bgm_path,
+                        output_path=out,
+                        duration_sec=float(duration_sec),
+                        tip_interval=float(tip_interval),
+                        font_family=reel_font_family,
+                        title_weight=reel_title_weight,
+                        body_weight=reel_body_weight,
+                    )
+                st.session_state["reel_result"] = {
+                    "path": str(out),
+                    "message": f"텍스트 릴스 완료 · {project_dir.name}",
+                }
+                st.session_state["selected_project"] = project_dir.name
+                st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"생성 실패: {exc}")
+
+    if reel_kind == "포트폴리오 쇼케이스" and run_folio:
+        if not folio_images:
+            st.error("이미지를 1장 이상 업로드하세요.")
+        else:
+            try:
+                from modules.reels_maker import create_reels_project, make_portfolio_showcase_reel
+
+                project_dir = create_reels_project("folio", folio_title or "portfolio")
+                img_dir = project_dir / "images"
+                img_dir.mkdir(parents=True, exist_ok=True)
+                saved: list[Path] = []
+                for i, up in enumerate(folio_images):
+                    ext = Path(up.name).suffix.lower() or ".jpg"
+                    dest = img_dir / f"img_{i + 1:02d}{ext}"
+                    dest.write_bytes(up.getvalue())
+                    saved.append(dest)
+                bgm_path = None
+                if bgm_file is not None:
+                    bgm_path = project_dir / f"bgm{Path(bgm_file.name).suffix.lower()}"
+                    bgm_path.write_bytes(bgm_file.getvalue())
+                out = project_dir / "final_reel.mp4"
+                with st.spinner("포트폴리오 릴스 렌더링 중…"):
+                    make_portfolio_showcase_reel(
+                        image_paths=saved,
+                        bgm_path=bgm_path,
+                        output_path=out,
+                        per_image_sec=float(per_image),
+                        crossfade_sec=float(crossfade),
+                    )
+                st.session_state["reel_result"] = {
+                    "path": str(out),
+                    "message": f"포트폴리오 릴스 완료 · {project_dir.name}",
+                }
+                st.session_state["selected_project"] = project_dir.name
+                st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"생성 실패: {exc}")
 
 # ── Page: Projects ───────────────────────────────────────────
 elif page == "📁 프로젝트":

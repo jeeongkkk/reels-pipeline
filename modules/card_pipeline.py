@@ -66,9 +66,18 @@ def _build_source_credit(web_meta: Any, facts: list[str]) -> str:
 
 
 def _append_fixed_outro(
-    slides: list[dict[str, Any]], *, source_credit: str
+    slides: list[dict[str, Any]], *, source_credit: str, brand: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
-    """Ensure one fixed OUTRO slide at the end."""
+    """Ensure one fixed OUTRO slide at the end (brand-aware copy)."""
+    brand = brand or load_brand_config()
+    cn = brand.get("card_news") or {}
+    title_lines = cn.get("outro_title_lines") or ["당신의", "전략 기획실이", "되어드립니다."]
+    if isinstance(title_lines, str):
+        title_lines = [ln.strip() for ln in title_lines.split("\n") if ln.strip()]
+    subtitle = str(
+        cn.get("outro_subtitle") or "단 하나의 실전 비즈니스 인사이트, 위드조율"
+    )
+    highlight = str(cn.get("outro_highlight") or "").strip()
     out = [
         s
         for s in slides
@@ -77,8 +86,9 @@ def _append_fixed_outro(
     out.append(
         {
             "slide_type": "OUTRO",
-            "title_lines": ["당신의", "전략 기획실이", "되어드립니다."],
-            "subtitle": "단 하나의 실전 비즈니스 인사이트, 위드조율",
+            "title_lines": list(title_lines)[:4],
+            "subtitle": subtitle,
+            "outro_highlight": highlight,
             "source_credit": source_credit,
         }
     )
@@ -99,6 +109,8 @@ async def render_card_news_project(
     make_video: bool = False,  # ignored – video path removed
     on_progress: ProgressFn | None = None,
     ig_handle: str = "",
+    type_style: dict[str, Any] | None = None,
+    highlight_color: str = "",
 ) -> Path:
     """Card script → hybrid backgrounds → retina PNG → ZIP.
 
@@ -115,6 +127,12 @@ async def render_card_news_project(
     )
     default_color = brand.get("card_news", {}).get("brand_color", "#fc4d01")
     color = brand_color or default_color
+    from modules.brand_colors import default_highlight_color, normalize_hex
+
+    hi_color = normalize_hex(
+        highlight_color or str(brand.get("card_news", {}).get("highlight_color") or ""),
+        color,
+    )
     facts = research_facts or []
 
     _emit(on_progress, 42, "웹 검색 팩트 수집 + 카드뉴스 대본 생성 중...")
@@ -135,7 +153,7 @@ async def render_card_news_project(
         )
     slides = [s.to_dict() for s in script.slides]
     source_credit = _build_source_credit(web_meta, facts)
-    slides = _append_fixed_outro(slides, source_credit=source_credit)
+    slides = _append_fixed_outro(slides, source_credit=source_credit, brand=brand)
     _emit(on_progress, 50, f"슬라이드 {len(slides)}장 확정 (source={script.source})")
 
     _emit(on_progress, 55, "표지(COVER) 실사 우선 (og → CSE/Pexels → Fal)...")
@@ -171,6 +189,20 @@ async def render_card_news_project(
     _emit(on_progress, 62, f"배경 {len(backgrounds)}장 ({sources})")
 
     frames_dir = ensure_dir(project_dir / "card_frames")
+    handle = ig_handle or str(brand.get("card_news", {}).get("ig_handle") or "")
+    from modules.typography import default_type_style_for_brand, type_style_from_mapping
+
+    style = (
+        type_style_from_mapping(type_style).to_dict()
+        if type_style
+        else default_type_style_for_brand(brand).to_dict()
+    )
+    save_json(project_dir, "type_style.json", style)
+    save_json(
+        project_dir,
+        "color_style.json",
+        {"box_color": color, "highlight_color": hi_color},
+    )
     _emit(on_progress, 68, "레티나 PNG 합성 중 (1080×1440 · COVER/CONTENT/SUMMARY/OUTRO)...")
     pngs = await render_slides_to_pngs(
         slides,
@@ -179,8 +211,10 @@ async def render_card_news_project(
         brand_color=color,
         logo=logo,
         highlight_mode=highlight_mode,
-        ig_handle=ig_handle,
+        ig_handle=handle,
         source_credit=source_credit,
+        type_style=style,
+        highlight_color=hi_color,
     )
 
     _emit(on_progress, 88, "초고화질 PNG ZIP 패키징 중...")

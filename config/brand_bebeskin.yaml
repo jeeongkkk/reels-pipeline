@@ -1,0 +1,154 @@
+# BebeSkin – 아기 피부 관찰·기록 앱 콘텐츠 브랜드
+# 진단/처방 단정 금지. 관찰·보습·기록·진료 보조 톤.
+
+profile:
+  id: bebeskin
+  content_mode: parenting_care   # planner + topic scoring
+
+brand:
+  name: "BEBESKIN"
+  tagline: "찰칵으로 기록하는 아기 피부"
+  industry: "Parenting / Baby Skin Care Observation"
+
+tone:
+  persona: "영유아 보호자 옆에서 차분히 도와주는 육아 콘텐츠 에디터"
+  style: "따뜻하고 짧은 해요체, 불안을 키우지 않는 관찰 중심"
+  formality: "casual-spoken"
+
+  do:
+    - "관찰·기록·비교·보습 루틴처럼 바로 할 수 있는 행동을 말한다"
+    - "숫자·기간·체크 포인트를 구체적으로 쓴다"
+    - "불안할 때는 소아과 상담을 부드럽게 권한다"
+    - "앱 가치(기록/비교/진료 보조)와 자연스럽게 연결한다"
+
+  dont:
+    - "진단명 확정, 특효, 완치, 약 처방 대체 표현"
+    - "공포 마케팅 (방치하면 큰일, 무조건 위험)"
+    - "개인 의료정보·얼굴 식별이 필요한 자극적 표현"
+    - "문어체 종결 (~입니다, ~합니다)과 보도자료 요약체"
+
+script:
+  target_duration_sec: 30
+  max_words: 90
+  hook_max_chars: 26
+  cta_template: "기록은 베비스킨에 남겨두고, 궁금하면 소아과에 물어보세요."
+
+caption:
+  font: "Malgun-Gothic-Bold"
+  font_size: 52
+  color: "#FFFFFF"
+  stroke_color: "#000000"
+  stroke_width: 6
+  position: "bottom"
+  highlight_color: "#FFE8A3"
+  max_chars_per_line: 14
+  max_width_ratio: 0.86
+  safe_bottom_ratio: 0.30
+  bg_opacity: 0.0
+  dynamic: true
+
+edit:
+  cut_min_sec: 2.5
+  cut_max_sec: 3.5
+
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  format: "portrait"
+
+audio:
+  bgm_volume_normal: 0.26
+  bgm_volume_ducked: 0.14
+  sfx_caption_volume: 0.30
+  sfx_transition_volume: 0.25
+  sfx:
+    caption_pop: "typing_click.mp3"
+    transition: "swish.mp3"
+
+visual:
+  prefer:
+    - "parent baby soft morning light home"
+    - "baby lotion cream hands gentle care"
+    - "calendar photo diary parenting"
+    - "soft towel bath baby care"
+    - "mother checking baby calm home"
+    - "skincare moisturizer jar soft"
+  avoid:
+    - "bloody"
+    - "hospital trauma"
+    - "graphic rash closeup"
+    - "cartoon"
+    - "party"
+    - "abstract gradient"
+
+hook_scoring:
+  weights:
+    audience_relevance: 0.32
+    emotional_trigger: 0.22
+    clarity: 0.22
+    novelty: 0.14
+    risk: -0.15
+  min_score_to_proceed: 65
+
+reference:
+  follow_points_default:
+    - hook
+    - caption
+    - tone
+  style_notes_placeholder: >
+    예: 짧은 관찰 팁, 불안 완화 톤, 진단 단정 금지,
+    소아과 상담 안내, 기록·비교 행동 유도
+  local_dir: "./config/references"
+
+production:
+  default_mode: "card_news"
+  modes:
+    card_news:
+      label: "카드뉴스 PNG (하이엔드)"
+      description: "아기 피부 관찰 팁 카드뉴스 PNG + ZIP"
+      needs_tts: false
+    voice_tts:
+      label: "대본 + TTS (나레이션)"
+      description: "훅/본문/CTA 대본 + Edge-TTS"
+      needs_tts: true
+    music_caption:
+      label: "음악 + 자막만"
+      description: "BGM + 화면 자막"
+      needs_tts: false
+  music_caption_target_sec: 20
+
+card_news:
+  brand_color: "#5B8C7A"       # soft sage green
+  highlight_color: "#E8A87C"   # soft peach for body emphasis
+  highlight_mode: "box"
+  font_family: "Pretendard"
+  brand_name: "BEBESKIN"
+  ig_handle: "@bebeskin.app"
+  slides_min: 6
+  slides_max: 8
+  device_scale_factor: 2
+  output: "png_zip"
+  color_palette:
+    - {id: sage, label: "세이지", box: "#5B8C7A", highlight: "#5B8C7A"}
+    - {id: sage_peach, label: "세이지 + 피치", box: "#5B8C7A", highlight: "#E8A87C"}
+    - {id: mint_coral, label: "민트 + 코랄", box: "#7CB7A0", highlight: "#E07A5F"}
+    - {id: blush_sage, label: "블러시 + 세이지", box: "#D4A5A5", highlight: "#5B8C7A"}
+    - {id: sky_soft, label: "스카이 + 민트", box: "#6B9AC4", highlight: "#7CB7A0"}
+  outro_title_lines:
+    - "찰칵 한 번이"
+    - "아기 피부 기록이"
+    - "됩니다."
+  outro_highlight: "아기 피부 기록"
+  outro_subtitle: "텍스트 없이 기록·비교·진료 보조, 베비스킨"
+
+planner:
+  audience: "영유아 보호자·육아 초보 부모"
+  role_title: "아기 피부 관찰 콘텐츠 에디터"
+  safety: >
+    진단·처방·특효·완치 단정 금지. 관찰·보습·기록·비교·환경/루틴 체크 중심.
+    이상 징후가 보이면 소아과 상담을 부드럽게 권유.
+  cover_image_prompt: >
+    English UGC iPhone snap: soft home morning light, parent hands with baby lotion,
+    calm caregiving moment, natural messy home, no graphic rash, no hospital trauma,
+    no studio glam, no AI-perfect skin

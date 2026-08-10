@@ -80,6 +80,28 @@ PAPERLOGY_DIR = ROOT_DIR / "assets" / "fonts" / "Paperlogy"
 FREESENT_DIR = ROOT_DIR / "assets" / "fonts" / "Freesentation"
 WIN_FONTS = Path("C:/Windows/Fonts")
 
+# Active typography for current render batch (set by render_all_pil)
+_ACTIVE_TYPE: dict[str, str] = {
+    "family": "pretendard",
+    "title_weight": "extrabold",
+    "body_weight": "regular",
+    "wordmark_weight": "bold",
+    "handle_weight": "medium",
+    "sub_weight": "regular",
+}
+
+
+def set_active_type_style(style: dict[str, str] | None = None) -> None:
+    from modules.typography import type_style_from_mapping
+
+    data = type_style_from_mapping(style or {}).to_dict()
+    _ACTIVE_TYPE.clear()
+    _ACTIVE_TYPE.update(data)
+
+
+def get_active_type_style() -> dict[str, str]:
+    return dict(_ACTIVE_TYPE)
+
 
 def _resolve_font(name: str) -> Path | None:
     for folder in (FONTS_DIR, PAPERLOGY_DIR, FREESENT_DIR):
@@ -89,6 +111,7 @@ def _resolve_font(name: str) -> Path | None:
     mapping = {
         "Pretendard-Regular.otf": ("malgun.ttf", "arial.ttf"),
         "Pretendard-Medium.otf": ("malgun.ttf", "arial.ttf"),
+        "Pretendard-SemiBold.otf": ("malgunbd.ttf", "arialbd.ttf"),
         "Pretendard-Bold.otf": ("malgunbd.ttf", "arialbd.ttf"),
         "Pretendard-ExtraBold.otf": ("malgunbd.ttf", "arialbd.ttf"),
         "Pretendard-Black.otf": ("malgunbd.ttf", "arialbd.ttf"),
@@ -97,12 +120,75 @@ def _resolve_font(name: str) -> Path | None:
         "Paperlogy-7Bold.ttf": ("malgunbd.ttf", "arialbd.ttf"),
         "Freesentation-8ExtraBold.ttf": ("malgunbd.ttf", "arialbd.ttf"),
         "Freesentation-9Black.ttf": ("malgunbd.ttf", "arialbd.ttf"),
+        "malgun.ttf": ("malgun.ttf",),
+        "malgunbd.ttf": ("malgunbd.ttf",),
     }
     for sys_name in mapping.get(name, ("malgunbd.ttf", "malgun.ttf")):
         p = WIN_FONTS / sys_name
         if p.exists():
             return p
     return None
+
+
+def _weight_file_list(family: str, weight: str) -> list[str]:
+    """Map logical weight → candidate font filenames (nearest fallbacks included)."""
+    w = (weight or "regular").lower()
+    fam = (family or "pretendard").lower()
+
+    paper = {
+        "thin": ["Paperlogy-1Thin.ttf", "Paperlogy-2ExtraLight.ttf", "Paperlogy-3Light.ttf"],
+        "extralight": ["Paperlogy-2ExtraLight.ttf", "Paperlogy-3Light.ttf", "Paperlogy-1Thin.ttf"],
+        "light": ["Paperlogy-3Light.ttf", "Paperlogy-4Regular.ttf", "Paperlogy-2ExtraLight.ttf"],
+        "regular": ["Paperlogy-4Regular.ttf", "Paperlogy-5Medium.ttf", "Pretendard-Regular.otf"],
+        "medium": ["Paperlogy-5Medium.ttf", "Paperlogy-6SemiBold.ttf", "Paperlogy-4Regular.ttf"],
+        "semibold": ["Paperlogy-6SemiBold.ttf", "Paperlogy-7Bold.ttf", "Pretendard-SemiBold.otf"],
+        "bold": ["Paperlogy-7Bold.ttf", "Paperlogy-8ExtraBold.ttf", "Pretendard-Bold.otf"],
+        "extrabold": ["Paperlogy-8ExtraBold.ttf", "Paperlogy-9Black.ttf", "Pretendard-ExtraBold.otf"],
+        "black": ["Paperlogy-9Black.ttf", "Paperlogy-8ExtraBold.ttf", "Pretendard-Black.otf"],
+    }
+    free = {
+        "thin": ["Freesentation-1Thin.ttf", "Freesentation-2ExtraLight.ttf"],
+        "extralight": ["Freesentation-2ExtraLight.ttf", "Freesentation-3Light.ttf"],
+        "light": ["Freesentation-3Light.ttf", "Freesentation-4Regular.ttf"],
+        "regular": ["Freesentation-4Regular.ttf", "Pretendard-Regular.otf"],
+        "medium": ["Freesentation-5Medium.ttf", "Freesentation-4Regular.ttf"],
+        "semibold": ["Freesentation-6SemiBold.ttf", "Freesentation-7Bold.ttf", "Pretendard-SemiBold.otf"],
+        "bold": ["Freesentation-7Bold.ttf", "Freesentation-8ExtraBold.ttf", "Pretendard-Bold.otf"],
+        "extrabold": ["Freesentation-8ExtraBold.ttf", "Freesentation-9Black.ttf", "Pretendard-ExtraBold.otf"],
+        "black": ["Freesentation-9Black.ttf", "Freesentation-8ExtraBold.ttf", "Pretendard-Black.otf"],
+    }
+    # Pretendard pack in repo: Regular / SemiBold / Bold / ExtraBold / Black
+    pret = {
+        "thin": ["Pretendard-Regular.otf", "Paperlogy-1Thin.ttf"],
+        "extralight": ["Pretendard-Regular.otf", "Paperlogy-2ExtraLight.ttf"],
+        "light": ["Pretendard-Regular.otf", "Paperlogy-3Light.ttf"],
+        "regular": ["Pretendard-Regular.otf"],
+        "medium": ["Pretendard-SemiBold.otf", "Pretendard-Regular.otf", "Paperlogy-5Medium.ttf"],
+        "semibold": ["Pretendard-SemiBold.otf", "Pretendard-Bold.otf"],
+        "bold": ["Pretendard-Bold.otf", "Pretendard-ExtraBold.otf"],
+        "extrabold": ["Pretendard-ExtraBold.otf", "Pretendard-Black.otf", "Pretendard-Bold.otf"],
+        "black": ["Pretendard-Black.otf", "Pretendard-ExtraBold.otf"],
+    }
+    malgun = {
+        "thin": ["malgun.ttf"],
+        "extralight": ["malgun.ttf"],
+        "light": ["malgun.ttf"],
+        "regular": ["malgun.ttf"],
+        "medium": ["malgun.ttf", "malgunbd.ttf"],
+        "semibold": ["malgunbd.ttf", "malgun.ttf"],
+        "bold": ["malgunbd.ttf"],
+        "extrabold": ["malgunbd.ttf"],
+        "black": ["malgunbd.ttf"],
+    }
+
+    table = pret
+    if fam == "paperlogy":
+        table = paper
+    elif fam == "freesentation":
+        table = free
+    elif fam == "malgun":
+        table = malgun
+    return list(table.get(w) or table.get("regular") or ["Pretendard-Regular.otf"])
 
 
 def _font(
@@ -112,23 +198,7 @@ def _font(
     family: str = "pretendard",
 ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     size = max(12, int(size))
-    if family == "paperlogy":
-        order = {
-            "regular": ["Paperlogy-4Regular.ttf", "Pretendard-Regular.otf"],
-            "medium": ["Paperlogy-5Medium.ttf", "Pretendard-Medium.otf"],
-            "bold": ["Paperlogy-7Bold.ttf", "Paperlogy-8ExtraBold.ttf", "Pretendard-Bold.otf"],
-            "extrabold": ["Paperlogy-8ExtraBold.ttf", "Paperlogy-9Black.ttf", "Pretendard-ExtraBold.otf"],
-            "black": ["Paperlogy-9Black.ttf", "Paperlogy-8ExtraBold.ttf", "Pretendard-Black.otf"],
-        }.get(weight, ["Paperlogy-8ExtraBold.ttf"])
-    else:
-        order = {
-            "regular": ["Pretendard-Regular.otf"],
-            "medium": ["Pretendard-Medium.otf", "Pretendard-Regular.otf"],
-            "bold": ["Pretendard-Bold.otf", "Pretendard-ExtraBold.otf", "Pretendard-Black.otf"],
-            "extrabold": ["Pretendard-ExtraBold.otf", "Pretendard-Black.otf", "Pretendard-Bold.otf"],
-            "black": ["Pretendard-Black.otf", "Pretendard-ExtraBold.otf", "Pretendard-Bold.otf"],
-        }.get(weight, ["Pretendard-Bold.otf"])
-    for fname in order:
+    for fname in _weight_file_list(family, weight):
         path = _resolve_font(fname)
         if path:
             try:
@@ -378,18 +448,26 @@ def draw_text_wordmark(
     *,
     scale: int,
     y: int | None = None,
+    label: str | None = None,
+    accent: tuple[int, int, int] | None = None,
 ) -> int:
-    """Top-center text logo WITHCHOYOOL in #fc4d01 Bold. Returns bottom Y."""
+    """Top-center text logo in brand accent. Returns bottom Y."""
+    style = get_active_type_style()
     draw = ImageDraw.Draw(base)
     w, _h = base.size
-    font = _font(WORDMARK_SIZE * scale, weight="bold", family="pretendard")
-    label = TEXT_LOGO
-    left, top, right, bottom = _text_bbox(label, font)
+    font = _font(
+        WORDMARK_SIZE * scale,
+        weight=style.get("wordmark_weight", "bold"),
+        family=style.get("family", "pretendard"),
+    )
+    text = (label or TEXT_LOGO).strip() or TEXT_LOGO
+    fill = accent or ACCENT
+    left, top, right, bottom = _text_bbox(text, font)
     tw = right - left
     th = bottom - top
     x = (w - tw) // 2 - left
     yy = (WORDMARK_Y * scale) if y is None else y
-    draw.text((x, yy - top), label, fill=ACCENT, font=font)
+    draw.text((x, yy - top), text, fill=fill, font=font)
     return yy + th
 
 
@@ -517,12 +595,22 @@ def _strip_quotes(text: str) -> str:
     return t.strip()
 
 
-def _find_outro_highlight(plain: str) -> tuple[int, str]:
-    """Return (index, matched highlight) for '전략 기획실' / '전략기획실'."""
-    for hi in (OUTRO_HIGHLIGHT, OUTRO_HIGHLIGHT.replace(" ", "")):
-        idx = plain.find(hi)
+def _find_outro_highlight(plain: str, highlight: str = "") -> tuple[int, str]:
+    """Return (index, matched highlight) for brand outro accent phrase."""
+    candidates = []
+    hi = (highlight or OUTRO_HIGHLIGHT or "").strip()
+    if hi:
+        candidates.append(hi)
+        candidates.append(hi.replace(" ", ""))
+    if OUTRO_HIGHLIGHT not in candidates:
+        candidates.append(OUTRO_HIGHLIGHT)
+        candidates.append(OUTRO_HIGHLIGHT.replace(" ", ""))
+    for cand in candidates:
+        if not cand:
+            continue
+        idx = plain.find(cand)
         if idx >= 0:
-            return idx, hi
+            return idx, cand
     return -1, ""
 
 
@@ -535,12 +623,13 @@ def _draw_outro_title_line(
     font: ImageFont.ImageFont,
     accent: tuple[int, int, int],
     default_fill: tuple[int, int, int] = INK,
+    highlight: str = "",
 ) -> int:
-    """Draw outro line; paint '전략 기획실' segment in brand orange."""
+    """Draw outro line; paint highlight segment in brand color."""
     plain = _strip_quotes(text)
     if not plain:
         return y
-    idx, hi = _find_outro_highlight(plain)
+    idx, hi = _find_outro_highlight(plain, highlight)
     left0, top0, _, bottom0 = _text_bbox(plain, font)
     if idx < 0 or not hi:
         draw.text((x - left0, y - top0), plain, fill=default_fill, font=font)
@@ -571,27 +660,32 @@ def _render_outro(
     scale: int,
     source_credit: str = "",
 ) -> Image.Image:
-    del logo
     accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
-    draw_text_wordmark(base, scale=scale)
+    mark = (logo or str(slide.get("brand_name") or "") or TEXT_LOGO).strip()
+    draw_text_wordmark(base, scale=scale, label=mark, accent=accent)
 
     left_x = CONTENT_LEFT * scale
     max_w = w - left_x - CONTENT_LEFT * scale
-    # Always use fixed copy (ignore LLM quotes / variants)
-    lines = list(OUTRO_FIXED_LINES)
+    lines = _as_lines(slide.get("title_lines"))
+    if not lines:
+        lines = list(OUTRO_FIXED_LINES)
+    highlight = str(slide.get("outro_highlight") or OUTRO_HIGHLIGHT).strip()
 
     prepared: list[tuple[str, ImageFont.ImageFont]] = []
+    style = get_active_type_style()
+    fam = style.get("family", "pretendard")
+    title_w = style.get("title_weight", "black")
     for clean in lines:
         _, font = _fit_single_line(
             clean,
             max_width=max_w,
             base_size=OUTRO_TITLE_BASE,
             scale=scale,
-            weight="black",
+            weight=title_w,
             min_size=72,
-            family="paperlogy",
+            family=fam,
         )
         prepared.append((clean, font))
 
@@ -602,7 +696,11 @@ def _render_outro(
             or "단 하나의 실전 비즈니스 인사이트, 위드조율"
         )
     )
-    sub_font = _font(OUTRO_SUB_BASE * scale, weight="regular", family="pretendard")
+    sub_font = _font(
+        OUTRO_SUB_BASE * scale,
+        weight=style.get("sub_weight", "regular"),
+        family=fam,
+    )
     title_gap = OUTRO_TITLE_GAP * scale
     sub_gap = OUTRO_SUB_GAP * scale
     total_height = sum(_text_height(t, f) for t, f in prepared)
@@ -613,7 +711,14 @@ def _render_outro(
     y = max((h - total_height) // 2, int(h * 0.22))
     for i, (clean, font) in enumerate(prepared):
         y = _draw_outro_title_line(
-            draw, clean, y=y, x=left_x, font=font, accent=accent, default_fill=INK
+            draw,
+            clean,
+            y=y,
+            x=left_x,
+            font=font,
+            accent=accent,
+            default_fill=INK,
+            highlight=highlight,
         )
         if i < len(prepared) - 1:
             y += title_gap
@@ -625,7 +730,11 @@ def _render_outro(
     if credit:
         if not credit.startswith("출처"):
             credit = f"출처 | {credit}"
-        sfont = _font(OUTRO_SOURCE_SIZE * scale, weight="regular", family="pretendard")
+        sfont = _font(
+            OUTRO_SOURCE_SIZE * scale,
+            weight=style.get("sub_weight", "regular"),
+            family=fam,
+        )
         right = w - OUTRO_SOURCE_RIGHT * scale
         # Usable width: left margin → right margin (forces wrap for long credits)
         max_src_w = max(120 * scale, right - (OUTRO_SOURCE_RIGHT * scale))
@@ -793,15 +902,16 @@ def _fit_header_box_font(
     scale: int,
     min_size: int = 26,
 ) -> tuple[int, ImageFont.ImageFont]:
-    """Bold/ExtraBold font reserved for orange subtitle boxes only."""
+    """Font for orange subtitle boxes – uses active title weight/family."""
+    style = get_active_type_style()
     return _fit_single_line(
         text,
         max_width=max_width,
         base_size=base_size,
         scale=scale,
-        weight="extrabold",
+        weight=style.get("title_weight", "extrabold"),
         min_size=min_size,
-        family="pretendard",
+        family=style.get("family", "pretendard"),
     )
 
 
@@ -871,9 +981,10 @@ def _render_cover(
     logo: str,
     scale: int,
     ig_handle: str = "",
+    highlight_color: str = "",
 ) -> Image.Image:
-    """COVER – no logo; fixed @with.choyool + left title; brand punch box."""
-    del logo, ig_handle  # cover IG is always hardcoded
+    """COVER – brand IG handle + left title; brand punch box."""
+    del logo, highlight_color  # cover punch uses box (brand) color only
     accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     _apply_bottom_linear_gradient(base)
     draw = ImageDraw.Draw(base)
@@ -884,23 +995,29 @@ def _render_cover(
         title = _clean_display(str(slide.get("main_title") or slide.get("hook") or ""))
         lines = [title] if title else []
     lines = [ln for ln in lines[:4] if ln]
-    handle = COVER_IG_HANDLE
+    handle = _normalize_ig_handle(ig_handle) or COVER_IG_HANDLE
     if not lines:
         return base
 
     max_w = int(w * COVER_MAX_W_RATIO)
     left_x = int(w * COVER_LEFT_RATIO)
+    style = get_active_type_style()
+    fam = style.get("family", "pretendard")
     _, title_font = _fit_uniform_lines(
         lines,
         max_width=max_w - COVER_BOX_PAD_X * 2 * scale,
         base_size=COVER_TITLE_BASE,
         scale=scale,
-        weight="extrabold",
+        weight=style.get("title_weight", "extrabold"),
         min_size=COVER_TITLE_MIN,
-        family="paperlogy",
+        family=fam,
     )
 
-    handle_font = _font(COVER_HANDLE_SIZE * scale, weight="medium", family="pretendard")
+    handle_font = _font(
+        COVER_HANDLE_SIZE * scale,
+        weight=style.get("handle_weight", "medium"),
+        family=fam,
+    )
     gap = int(COVER_LINE_GAP * scale)
     hi = _cover_highlight_index(lines)
     box_extra = COVER_BOX_PAD_Y * scale
@@ -956,12 +1073,15 @@ def _render_content(
     brand_color: str,
     logo: str,
     scale: int,
+    highlight_color: str = "",
 ) -> Image.Image:
-    del logo
-    accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
+    box_accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
+    text_accent = _hex_rgb(highlight_color or brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
-    wordmark_bottom = draw_text_wordmark(base, scale=scale)
+    wordmark_bottom = draw_text_wordmark(
+        base, scale=scale, label=(logo or TEXT_LOGO), accent=box_accent
+    )
 
     header = _section_header(slide)
     left_x = CONTENT_LEFT * scale
@@ -985,6 +1105,9 @@ def _render_content(
         )
 
     gap_after_header = CONTENT_HEADER_GAP * scale if header else 0
+    style = get_active_type_style()
+    fam = style.get("family", "pretendard")
+    body_w = style.get("body_weight", "regular")
     prepared: list[tuple[str, int, ImageFont.ImageFont]] = []
     for raw in body_lines:
         size, font = _fit_single_line(
@@ -992,8 +1115,9 @@ def _render_content(
             max_width=max_w,
             base_size=CONTENT_BODY_BASE,
             scale=scale,
-            weight="regular",
+            weight=body_w,
             min_size=30,
+            family=fam,
         )
         prepared.append((raw, size, font))
 
@@ -1010,13 +1134,13 @@ def _render_content(
 
     if header and header_font is not None:
         y = _draw_left_header_box(
-            draw, header, y=y, x=left_x, font=header_font, accent=accent, scale=scale
+            draw, header, y=y, x=left_x, font=header_font, accent=box_accent, scale=scale
         )
         y += gap_after_header
 
     for i, (raw, size, font) in enumerate(prepared):
         y = _draw_left_emphasis_line(
-            draw, raw, y=y, x=left_x, font=font, accent=accent, default_fill=INK
+            draw, raw, y=y, x=left_x, font=font, accent=text_accent, default_fill=INK
         )
         if i < len(prepared) - 1:
             y += line_gaps[i]
@@ -1030,12 +1154,15 @@ def _render_summary(
     brand_color: str,
     logo: str,
     scale: int,
+    highlight_color: str = "",
 ) -> Image.Image:
-    del logo
-    accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
+    box_accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
+    text_accent = _hex_rgb(highlight_color or brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
     w, h = CARD_W * scale, CARD_H * scale
-    wordmark_bottom = draw_text_wordmark(base, scale=scale)
+    wordmark_bottom = draw_text_wordmark(
+        base, scale=scale, label=(logo or TEXT_LOGO), accent=box_accent
+    )
 
     title = _clean_display(str(slide.get("main_title") or slide.get("hook") or "핵심 체크 포인트"))
     left_x = CONTENT_LEFT * scale
@@ -1057,14 +1184,18 @@ def _render_summary(
         min_size=36,
     )
     item_fonts: list[ImageFont.ImageFont] = []
+    style = get_active_type_style()
+    fam = style.get("family", "pretendard")
+    body_w = style.get("body_weight", "regular")
     for clean in items:
         _, f = _fit_single_line(
             clean,
             max_width=max_w - 40 * scale,
             base_size=SUMMARY_ITEM_BASE,
             scale=scale,
-            weight="regular",
+            weight=body_w,
             min_size=30,
+            family=fam,
         )
         item_fonts.append(f)
 
@@ -1083,13 +1214,13 @@ def _render_summary(
         canvas_h=h, total_height=total_height, wordmark_bottom=wordmark_bottom, scale=scale
     )
     y = _draw_left_header_box(
-        draw, title, y=y, x=left_x, font=title_font, accent=accent, scale=scale
+        draw, title, y=y, x=left_x, font=title_font, accent=box_accent, scale=scale
     )
     y += gap_after_title
     for i, (clean, font) in enumerate(zip(items, item_fonts)):
         label = f"{i + 1}. {clean}"
         y = _draw_left_emphasis_line(
-            draw, label, y=y, x=left_x, font=font, accent=accent, default_fill=INK
+            draw, label, y=y, x=left_x, font=font, accent=text_accent, default_fill=INK
         )
         y += line_gap
     return base
@@ -1126,12 +1257,14 @@ def render_slide_pil(
     slide_total: int = 7,
     ig_handle: str = "",
     source_credit: str = "",
+    highlight_color: str = "",
 ) -> Path:
     scale = RETINA
     w, h = CARD_W * scale, CARD_H * scale
     ensure_dir(output_path.parent)
     slide_type = _normalize_slide_type(slide, slide_index - 1, slide_total)
     color = brand_color or DEFAULT_BRAND_COLOR
+    hi = highlight_color or color
 
     if slide_type == "COVER":
         if background.exists():
@@ -1140,11 +1273,19 @@ def render_slide_pil(
         else:
             base = Image.new("RGB", (w, h), BG_DARK)
         img = _render_cover(
-            base, slide, brand_color=color, logo=logo, scale=scale, ig_handle=ig_handle
+            base,
+            slide,
+            brand_color=color,
+            logo=logo,
+            scale=scale,
+            ig_handle=ig_handle,
+            highlight_color=hi,
         )
     elif slide_type == "SUMMARY":
         base = Image.new("RGB", (w, h), BG_LIGHT)
-        img = _render_summary(base, slide, brand_color=color, logo=logo, scale=scale)
+        img = _render_summary(
+            base, slide, brand_color=color, logo=logo, scale=scale, highlight_color=hi
+        )
     elif slide_type == "OUTRO":
         base = Image.new("RGB", (w, h), BG_LIGHT)
         img = _render_outro(
@@ -1157,7 +1298,9 @@ def render_slide_pil(
         )
     else:
         base = Image.new("RGB", (w, h), BG_LIGHT)
-        img = _render_content(base, slide, brand_color=color, logo=logo, scale=scale)
+        img = _render_content(
+            base, slide, brand_color=color, logo=logo, scale=scale, highlight_color=hi
+        )
 
     img.save(output_path, format="PNG", optimize=True)
     logger.info("PIL magazine slide %d (%s) -> %s", slide_index, slide_type, output_path.name)
@@ -1173,8 +1316,11 @@ def render_all_pil(
     logo: str = BRAND_FALLBACK,
     ig_handle: str = "",
     source_credit: str = "",
+    type_style: dict[str, str] | None = None,
+    highlight_color: str = "",
 ) -> list[Path]:
     ensure_dir(output_dir)
+    set_active_type_style(type_style)
     out: list[Path] = []
     total = len(slides)
     for i, slide in enumerate(slides):
@@ -1191,6 +1337,7 @@ def render_all_pil(
                 slide_total=total,
                 ig_handle=ig_handle,
                 source_credit=source_credit if i == total - 1 else "",
+                highlight_color=highlight_color,
             )
         )
     return out

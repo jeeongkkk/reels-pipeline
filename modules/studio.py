@@ -66,6 +66,8 @@ async def run_full_studio_pipeline(
     category_id: str | None = None,
     custom_facts: list[str] | None = None,
     ig_handle: str = "",
+    type_style: dict | None = None,
+    highlight_color: str = "",
 ) -> StudioRunResult:
     """One-shot: (optional category topic pick) → research → hook → render."""
     from modules.topic_picker import pick_topic_for_category
@@ -104,6 +106,21 @@ async def run_full_studio_pipeline(
         reference=reference,
     )
     project_dir = create_project(strategic)
+    try:
+        from modules.brand_profiles import get_active_brand_id
+        from modules.utils import load_brand_config
+
+        save_json(
+            project_dir,
+            "brand_profile.json",
+            {
+                "profile_id": get_active_brand_id(),
+                "brand": (load_brand_config().get("brand") or {}),
+                "card_news": (load_brand_config().get("card_news") or {}),
+            },
+        )
+    except Exception:  # noqa: BLE001
+        pass
     if topic_pick_meta:
         save_json(project_dir, "topic_pick.json", topic_pick_meta)
 
@@ -144,6 +161,8 @@ async def run_full_studio_pipeline(
         draft_mode=draft_mode,
         make_video=make_video,
         ig_handle=ig_handle,
+        type_style=type_style,
+        highlight_color=highlight_color,
     )
 
     script_data: dict[str, Any] = {}

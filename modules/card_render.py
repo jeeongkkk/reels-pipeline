@@ -31,6 +31,8 @@ def _render_all_sync(
     highlight_mode: str = "color",
     ig_handle: str = "",
     source_credit: str = "",
+    type_style: dict[str, str] | None = None,
+    highlight_color: str = "",
 ) -> list[Path]:
     """Sync entry used by card_capture_worker (PIL, not Playwright)."""
     del highlight_mode  # legacy compat
@@ -45,6 +47,8 @@ def _render_all_sync(
         logo=logo,
         ig_handle=ig_handle,
         source_credit=source_credit,
+        type_style=type_style,
+        highlight_color=highlight_color,
     )
 
 
@@ -58,6 +62,8 @@ async def render_slides_to_pngs(
     highlight_mode: str = "color",
     ig_handle: str = "",
     source_credit: str = "",
+    type_style: dict[str, str] | None = None,
+    highlight_color: str = "",
 ) -> list[Path]:
     """Render slides to retina PNGs via PIL Insight layouts."""
     if not backgrounds:
@@ -76,5 +82,7 @@ async def render_slides_to_pngs(
             highlight_mode,
             ig_handle,
             source_credit,
+            type_style,
+            highlight_color,
         ),
     )
