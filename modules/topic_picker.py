@@ -13,7 +13,10 @@ from typing import Any
 
 from modules.research import (
     _dedupe_articles,
+    _filter_fresh_articles,
+    _freshness_window_days,
     _is_low_quality_article,
+    _parse_published_age_days,
     fetch_rss_feeds,
     google_news_search_url,
 )
@@ -329,31 +332,6 @@ def _shape_topic(category: TopicCategory, headline: str) -> str:
     return clean[:40].rstrip() + "…"
 
 
-def _parse_published_age_days(article: dict[str, Any]) -> float | None:
-    """Return age in days from published field, or None if unknown."""
-    from email.utils import parsedate_to_datetime
-
-    raw = str(article.get("published") or "").strip()
-    if not raw:
-        return None
-    try:
-        dt = parsedate_to_datetime(raw)
-        if dt.tzinfo is not None:
-            dt = dt.replace(tzinfo=None)
-        return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
-    except Exception:  # noqa: BLE001
-        pass
-    # Korean / ISO fallbacks
-    m = re.search(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", raw)
-    if m:
-        try:
-            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
-        except ValueError:
-            return None
-    return None
-
-
 def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
     title = str(article.get("title") or "")
     summary = str(article.get("summary") or "")
@@ -406,20 +384,19 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
 
     # Hard recency: prefer last N days (TAVILY_DAYS, default 7), drop older
     age = _parse_published_age_days(article)
-    settings = get_settings()
-    window = max(1, int(settings.tavily_days or 7))
+    window = _freshness_window_days()
     if age is not None:
         if age > window:
             return -1.0  # outside recent window
         if age <= 2:
             score += 2.0
+        elif age <= 3:
+            score += 1.6
         elif age <= window:
-            score += 1.2
-        else:
-            score += 0.3
+            score += 1.0
     else:
-        # Unknown publish date – mild penalty vs dated fresh articles
-        score -= 0.3
+        # Unknown publish date – strong penalty (undated evergreen/ads leak here)
+        score -= 1.5
 
     # Concrete signals that make good card-news topics
     if re.search(r"\d+(?:\.\d+)?(?:억|조|만|%|원|도|시간|분|회)", blob):
@@ -489,12 +466,15 @@ async def _tavily_boost(category: TopicCategory, limit: int = 6) -> list[dict[st
         title = str(r.get("title") or "").strip()
         if not title:
             continue
+        published = str(
+            r.get("published_date") or r.get("published") or r.get("date") or ""
+        ).strip()
         articles.append(
             {
                 "title": title,
                 "summary": str(r.get("content") or "")[:280],
                 "link": str(r.get("url") or ""),
-                "published": "",
+                "published": published,
                 "feed": "tavily",
             }
         )
@@ -518,6 +498,15 @@ async def pick_topic_for_category(
     tavily_extra = await _tavily_boost(category, limit=6)
     articles.extend(tavily_extra)
     articles = _dedupe_articles(articles)
+    window = _freshness_window_days()
+    before = len(articles)
+    articles = _filter_fresh_articles(articles, days=window)
+    logger.info(
+        "Topic pick freshness window=%dd articles=%d→%d",
+        window,
+        before,
+        len(articles),
+    )
 
     scored: list[tuple[float, dict[str, Any]]] = []
     for a in articles:

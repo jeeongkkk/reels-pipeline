@@ -83,13 +83,17 @@ def _tokenize(topic: str) -> list[str]:
 
 
 _LOW_QUALITY_SOURCES = re.compile(
-    r"브런치|brunch|티스토리|tistory|네이버\s*블로그|blog\.naver",
+    r"브런치|brunch|티스토리|tistory|네이버\s*블로그|blog\.naver|"
+    r"instagram\.com|www\.instagram|#협찬|제품제공|광고협찬|체험단",
     re.I,
 )
 
 
 def _is_low_quality_article(article: dict[str, Any]) -> bool:
-    blob = f"{article.get('title', '')} {article.get('link', '')} {article.get('feed', '')}"
+    blob = (
+        f"{article.get('title', '')} {article.get('summary', '')} "
+        f"{article.get('link', '')} {article.get('feed', '')}"
+    )
     return bool(_LOW_QUALITY_SOURCES.search(blob))
 
 
@@ -141,36 +145,89 @@ def _freshness_window_days() -> int:
 
 
 def _parse_published_age_days(article: dict[str, Any]) -> float | None:
-    """Return age in days from published field, or None if unknown."""
+    """Return age in days from published field, title/summary dates, or relative KR phrases."""
     from email.utils import parsedate_to_datetime
 
-    raw = str(article.get("published") or "").strip()
-    if not raw:
-        return None
-    try:
-        dt = parsedate_to_datetime(raw)
-        if dt.tzinfo is not None:
-            dt = dt.replace(tzinfo=None)
-        return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
-    except Exception:  # noqa: BLE001
-        pass
-    m = re.search(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", raw)
-    if m:
+    raw = str(article.get("published") or article.get("published_date") or "").strip()
+    if raw:
         try:
-            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            dt = parsedate_to_datetime(raw)
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
             return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+        except Exception:  # noqa: BLE001
+            pass
+        # ISO-ish
+        m_iso = re.search(r"(20\d{2})-(\d{1,2})-(\d{1,2})", raw)
+        if m_iso:
+            try:
+                dt = datetime(int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3)))
+                return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+            except ValueError:
+                pass
+        m = re.search(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", raw)
+        if m:
+            try:
+                dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+            except ValueError:
+                pass
+
+    blob = f"{article.get('title', '')} {article.get('summary', '')}"
+    # Relative Korean age phrases in body/title
+    m_rel = re.search(r"(\d+)\s*주\s*전", blob)
+    if m_rel:
+        return float(int(m_rel.group(1)) * 7)
+    m_rel = re.search(r"(\d+)\s*개월\s*전", blob)
+    if m_rel:
+        return float(int(m_rel.group(1)) * 30)
+    m_rel = re.search(r"(\d+)\s*일\s*전", blob)
+    if m_rel:
+        return float(int(m_rel.group(1)))
+
+    # Absolute date in headline/snippet (prefer most recent-looking explicit date)
+    dates: list[datetime] = []
+    for m in re.finditer(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", blob):
+        try:
+            dates.append(datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))))
         except ValueError:
-            return None
+            continue
+    if dates:
+        newest = max(dates)
+        return max(0.0, (datetime.now() - newest).total_seconds() / 86400.0)
     return None
 
 
 def _is_within_freshness_window(article: dict[str, Any], *, days: int | None = None) -> bool:
-    """True if published within window, or date unknown (keep; score will soft-penalize)."""
+    """True when known age <= window; undated kept only without older-year signals."""
     window = max(1, int(days if days is not None else _freshness_window_days()))
     age = _parse_published_age_days(article)
-    if age is None:
-        return True
-    return age <= window
+    if age is not None:
+        return age <= window + 0.01  # tiny float slack
+    years = _article_years(article)
+    if years:
+        newest = max(years)
+        if newest <= CURRENT_YEAR - 2:
+            return False
+        # Prior calendar year + short window → treat as stale
+        if newest < CURRENT_YEAR and window <= 14:
+            return False
+    return True
+
+
+def _filter_fresh_articles(
+    articles: list[dict[str, Any]], *, days: int | None = None
+) -> list[dict[str, Any]]:
+    """Hard-drop items older than the freshness window.
+
+    When enough dated articles remain, drop undated items (evergreen/ads leak).
+    """
+    window = max(1, int(days if days is not None else _freshness_window_days()))
+    kept = [a for a in articles if _is_within_freshness_window(a, days=window)]
+    dated = [a for a in kept if _parse_published_age_days(a) is not None]
+    if len(dated) >= 6:
+        return dated
+    return kept
 
 
 def resolve_feed_urls(topic: str, extra_feeds: list[str] | None = None) -> list[str]:
@@ -182,8 +239,12 @@ def resolve_feed_urls(topic: str, extra_feeds: list[str] | None = None) -> list[
     for q in _topic_news_queries(topic):
         feeds.append(google_news_search_url(q, days=days))
 
+    # Only use explicit env feeds — never mix undated top-news DEFAULT into topic search
     env_feeds = [u.strip() for u in (settings.news_rss_feeds or "").split(",") if u.strip()]
-    feeds.extend(env_feeds or DEFAULT_FEEDS)
+    if env_feeds:
+        feeds.extend(env_feeds)
+    elif not feeds:
+        feeds.extend(DEFAULT_FEEDS)
 
     if extra_feeds:
         feeds.extend(extra_feeds)
@@ -256,7 +317,7 @@ def _score_relevance(article: dict[str, Any], tokens: list[str], topic: str = ""
         elif age <= window:
             score += 0.12
     else:
-        score *= 0.92
+        score *= 0.75  # undated: prefer dated fresh hits
 
     return score
 
@@ -412,10 +473,8 @@ async def research_topic(
     articles = _dedupe_articles(articles)
     window = _freshness_window_days()
     before = len(articles)
-    # Prefer articles inside TAVILY_DAYS window when publish dates exist
-    recent = [a for a in articles if _is_within_freshness_window(a, days=window)]
-    if len(recent) >= 4:
-        articles = recent
+    # Hard drop older-than-window (incl. title "N주 전" / old calendar dates)
+    articles = _filter_fresh_articles(articles, days=window)
     logger.info(
         "Research freshness window=%dd articles=%d→%d",
         window,
