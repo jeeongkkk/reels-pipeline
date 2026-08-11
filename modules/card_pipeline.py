@@ -1,7 +1,7 @@
 """Card-news end-to-end: script → real photos → retina PNGs → ZIP.
 
 MoviePy / video assembly is intentionally removed from this path.
-Primary deliverable = ultra-HD PNG pack (2160×2880, 1080×1440 @2x) as card_slides.zip.
+Primary deliverable = ultra-HD PNG pack (feed 2160×2700 / reels 2160×3840) as card_slides.zip.
 """
 
 from __future__ import annotations
@@ -111,6 +111,7 @@ async def render_card_news_project(
     ig_handle: str = "",
     type_style: dict[str, Any] | None = None,
     highlight_color: str = "",
+    image_format: str = "",
 ) -> Path:
     """Card script → hybrid backgrounds → retina PNG → ZIP.
 
@@ -118,6 +119,10 @@ async def render_card_news_project(
     """
     if make_video:
         logger.info("make_video ignored – card_news outputs PNG/ZIP only")
+
+    from modules.card_format import get_active_card_format, set_active_card_format
+
+    fmt = set_active_card_format(image_format)
 
     brand = load_brand_config()
     logo = (
@@ -203,7 +208,21 @@ async def render_card_news_project(
         "color_style.json",
         {"box_color": color, "highlight_color": hi_color},
     )
-    _emit(on_progress, 68, "레티나 PNG 합성 중 (1080×1440 · COVER/CONTENT/SUMMARY/OUTRO)...")
+    save_json(
+        project_dir,
+        "image_format.json",
+        {
+            "id": fmt.id,
+            "label": fmt.label,
+            "logical": f"{fmt.logical_w}x{fmt.logical_h}",
+            "resolution": fmt.resolution_label,
+        },
+    )
+    _emit(
+        on_progress,
+        68,
+        f"레티나 PNG 합성 중 ({fmt.resolution_label} · COVER/CONTENT/SUMMARY/OUTRO)...",
+    )
     pngs = await render_slides_to_pngs(
         slides,
         backgrounds,
@@ -215,10 +234,12 @@ async def render_card_news_project(
         source_credit=source_credit,
         type_style=style,
         highlight_color=hi_color,
+        image_format=fmt.id,
     )
 
     _emit(on_progress, 88, "초고화질 PNG ZIP 패키징 중...")
     zip_path = _zip_slides(pngs, project_dir / "card_slides.zip")
+    active = get_active_card_format()
     save_json(
         project_dir,
         "card_output.json",
@@ -226,7 +247,8 @@ async def render_card_news_project(
             "frames_dir": str(frames_dir),
             "slides_zip": str(zip_path),
             "slide_count": len(pngs),
-            "resolution": "2160x2880",
+            "resolution": active.resolution_label.replace("×", "x"),
+            "image_format": active.id,
             "device_scale_factor": 2,
             "make_video": False,
             "source_credit": source_credit,

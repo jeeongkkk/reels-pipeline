@@ -8,13 +8,15 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
+from modules.card_format import RETINA, get_active_card_format, set_active_card_format
 from modules.utils import ROOT_DIR, ensure_dir, get_logger
 
 logger = get_logger(__name__)
 
+# Defaults kept for import compatibility; live size comes from active format
 CARD_W = 1080
-CARD_H = 1440  # Instagram feed 3:4
-RETINA = 2
+CARD_H = 1350  # Instagram feed 4:5 logical @1x → 2160×2700 @2x
+
 
 # ── WITHCHOYOOL Business Studio palette ───────────────────────
 BG_DARK = (21, 21, 21)
@@ -443,6 +445,23 @@ def _apply_bottom_linear_gradient(
     base.paste(composited.convert("RGB"))
 
 
+def _canvas_layout(scale: int) -> dict[str, int | float]:
+    """Active format canvas + Instagram safe-zone box."""
+    fmt = get_active_card_format()
+    w, h = fmt.canvas_px(scale)
+    left, top, right, bottom = fmt.safe_box(scale)
+    return {
+        "w": w,
+        "h": h,
+        "left": left,
+        "top": top,
+        "right": right,
+        "bottom": bottom,
+        "max_w": max(40 * scale, right - left),
+        "vs": fmt.v_scale,
+    }
+
+
 def draw_text_wordmark(
     base: Image.Image,
     *,
@@ -455,6 +474,7 @@ def draw_text_wordmark(
     style = get_active_type_style()
     draw = ImageDraw.Draw(base)
     w, _h = base.size
+    lay = _canvas_layout(scale)
     font = _font(
         WORDMARK_SIZE * scale,
         weight=style.get("wordmark_weight", "bold"),
@@ -466,7 +486,9 @@ def draw_text_wordmark(
     tw = right - left
     th = bottom - top
     x = (w - tw) // 2 - left
-    yy = (WORDMARK_Y * scale) if y is None else y
+    # Keep wordmark inside safe zone (critical for reels UI chrome)
+    default_y = max(int(lay["top"]), int(WORDMARK_Y * scale * min(1.0, float(lay["vs"]))))
+    yy = default_y if y is None else y
     draw.text((x, yy - top), text, fill=fill, font=font)
     return yy + th
 
@@ -662,12 +684,14 @@ def _render_outro(
 ) -> Image.Image:
     accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
-    w, h = CARD_W * scale, CARD_H * scale
+    lay = _canvas_layout(scale)
+    w, h = int(lay["w"]), int(lay["h"])
+    left_x = int(lay["left"])
+    max_w = int(lay["max_w"])
+    vs = float(lay["vs"])
     mark = (logo or str(slide.get("brand_name") or "") or TEXT_LOGO).strip()
     draw_text_wordmark(base, scale=scale, label=mark, accent=accent)
 
-    left_x = CONTENT_LEFT * scale
-    max_w = w - left_x - CONTENT_LEFT * scale
     lines = _as_lines(slide.get("title_lines"))
     if not lines:
         lines = list(OUTRO_FIXED_LINES)
@@ -701,14 +725,18 @@ def _render_outro(
         weight=style.get("sub_weight", "regular"),
         family=fam,
     )
-    title_gap = OUTRO_TITLE_GAP * scale
-    sub_gap = OUTRO_SUB_GAP * scale
+    title_gap = int(OUTRO_TITLE_GAP * scale * vs)
+    sub_gap = int(OUTRO_SUB_GAP * scale * vs)
     total_height = sum(_text_height(t, f) for t, f in prepared)
     total_height += title_gap * max(0, len(prepared) - 1)
     if sub:
         total_height += sub_gap + _text_height(sub, sub_font)
 
-    y = max((h - total_height) // 2, int(h * 0.22))
+    safe_top = int(lay["top"])
+    safe_bottom = int(lay["bottom"])
+    y = max((h - total_height) // 2, safe_top + int(h * 0.04))
+    if y + total_height > safe_bottom:
+        y = max(safe_top, safe_bottom - total_height)
     for i, (clean, font) in enumerate(prepared):
         y = _draw_outro_title_line(
             draw,
@@ -735,11 +763,10 @@ def _render_outro(
             weight=style.get("sub_weight", "regular"),
             family=fam,
         )
-        right = w - OUTRO_SOURCE_RIGHT * scale
-        # Usable width: left margin → right margin (forces wrap for long credits)
-        max_src_w = max(120 * scale, right - (OUTRO_SOURCE_RIGHT * scale))
+        right = int(lay["right"])
+        max_src_w = max(120 * scale, right - left_x)
         wrapped = _wrap_source_lines(credit, font=sfont, max_width=max_src_w)
-        bottom = h - OUTRO_SOURCE_BOTTOM * scale
+        bottom = int(lay["bottom"])
         _draw_right_aligned_block(
             draw,
             wrapped,
@@ -747,7 +774,7 @@ def _render_outro(
             right=right,
             font=sfont,
             fill=SOURCE_GRAY,
-            line_gap=max(4, int(6 * scale)),
+            line_gap=max(4, int(6 * scale * vs)),
         )
     return base
 
@@ -988,7 +1015,9 @@ def _render_cover(
     accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     _apply_bottom_linear_gradient(base)
     draw = ImageDraw.Draw(base)
-    w, h = CARD_W * scale, CARD_H * scale
+    lay = _canvas_layout(scale)
+    w, h = int(lay["w"]), int(lay["h"])
+    vs = float(lay["vs"])
 
     lines = _as_lines(slide.get("title_lines"))
     if not lines:
@@ -999,8 +1028,8 @@ def _render_cover(
     if not lines:
         return base
 
-    max_w = int(w * COVER_MAX_W_RATIO)
-    left_x = int(w * COVER_LEFT_RATIO)
+    left_x = int(lay["left"])
+    max_w = int(lay["max_w"])
     style = get_active_type_style()
     fam = style.get("family", "pretendard")
     _, title_font = _fit_uniform_lines(
@@ -1018,11 +1047,11 @@ def _render_cover(
         weight=style.get("handle_weight", "medium"),
         family=fam,
     )
-    gap = int(COVER_LINE_GAP * scale)
+    gap = int(COVER_LINE_GAP * scale * vs)
     hi = _cover_highlight_index(lines)
     box_extra = COVER_BOX_PAD_Y * scale
 
-    stack_h = _text_height(handle, handle_font) + COVER_HANDLE_GAP * scale
+    stack_h = _text_height(handle, handle_font) + int(COVER_HANDLE_GAP * scale * vs)
     for i, t in enumerate(lines):
         stack_h += _text_height(t, title_font)
         if i == hi:
@@ -1030,14 +1059,14 @@ def _render_cover(
         if i < len(lines) - 1:
             stack_h += gap
 
-    max_bottom = h - COVER_BOTTOM_MARGIN * scale
+    max_bottom = int(lay["bottom"])
+    min_y = max(int(lay["top"]), int(h * COVER_TEXT_Y_RATIO))
     y = max_bottom - stack_h
-    min_y = int(h * COVER_TEXT_Y_RATIO)
     if y < min_y:
         y = min_y
 
     y = _draw_left_line(draw, handle, y=y, x=left_x, font=handle_font, fill=SOFT_WHITE)
-    y += COVER_HANDLE_GAP * scale
+    y += int(COVER_HANDLE_GAP * scale * vs)
 
     for i, clean in enumerate(lines):
         if i == hi:
@@ -1059,11 +1088,24 @@ def _render_cover(
     return base
 
 
-
-def _content_start_y(*, canvas_h: int, total_height: int, wordmark_bottom: int, scale: int) -> int:
+def _content_start_y(
+    *,
+    canvas_h: int,
+    total_height: int,
+    wordmark_bottom: int,
+    scale: int,
+    safe_top: int | None = None,
+    safe_bottom: int | None = None,
+) -> int:
+    top = int(safe_top if safe_top is not None else 0)
+    bottom = int(safe_bottom if safe_bottom is not None else canvas_h)
+    floor = max(top, wordmark_bottom + 48 * scale)
+    usable = max(floor, bottom)
     y = (canvas_h - total_height) // 2
-    floor = wordmark_bottom + 48 * scale
-    return max(y, floor)
+    y = max(y, floor)
+    if y + total_height > usable:
+        y = max(floor, usable - total_height)
+    return y
 
 
 def _render_content(
@@ -1078,14 +1120,16 @@ def _render_content(
     box_accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     text_accent = _hex_rgb(highlight_color or brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
-    w, h = CARD_W * scale, CARD_H * scale
+    lay = _canvas_layout(scale)
+    w, h = int(lay["w"]), int(lay["h"])
+    vs = float(lay["vs"])
     wordmark_bottom = draw_text_wordmark(
         base, scale=scale, label=(logo or TEXT_LOGO), accent=box_accent
     )
 
     header = _section_header(slide)
-    left_x = CONTENT_LEFT * scale
-    max_w = w - left_x - CONTENT_LEFT * scale
+    left_x = int(lay["left"])
+    max_w = int(lay["max_w"])
     body_lines = [ln for ln in _body_lines_of(slide)[:6] if ln.strip()]
 
     header_font = None
@@ -1104,7 +1148,7 @@ def _render_content(
             + HEADER_PAD_BOTTOM * scale
         )
 
-    gap_after_header = CONTENT_HEADER_GAP * scale if header else 0
+    gap_after_header = int(CONTENT_HEADER_GAP * scale * vs) if header else 0
     style = get_active_type_style()
     fam = style.get("family", "pretendard")
     body_w = style.get("body_weight", "regular")
@@ -1121,7 +1165,9 @@ def _render_content(
         )
         prepared.append((raw, size, font))
 
-    line_gaps = [int(size * scale * (CONTENT_LINE_FACTOR - 1.0)) for _, size, _ in prepared]
+    line_gaps = [
+        int(size * scale * (CONTENT_LINE_FACTOR - 1.0) * vs) for _, size, _ in prepared
+    ]
     total_height = header_h + gap_after_header
     for i, (raw, size, font) in enumerate(prepared):
         total_height += _text_height(_plain_from_emphasis(raw), font)
@@ -1129,7 +1175,12 @@ def _render_content(
             total_height += line_gaps[i]
 
     y = _content_start_y(
-        canvas_h=h, total_height=total_height, wordmark_bottom=wordmark_bottom, scale=scale
+        canvas_h=h,
+        total_height=total_height,
+        wordmark_bottom=wordmark_bottom,
+        scale=scale,
+        safe_top=int(lay["top"]),
+        safe_bottom=int(lay["bottom"]),
     )
 
     if header and header_font is not None:
@@ -1159,14 +1210,16 @@ def _render_summary(
     box_accent = _hex_rgb(brand_color or DEFAULT_BRAND_COLOR)
     text_accent = _hex_rgb(highlight_color or brand_color or DEFAULT_BRAND_COLOR)
     draw = ImageDraw.Draw(base)
-    w, h = CARD_W * scale, CARD_H * scale
+    lay = _canvas_layout(scale)
+    w, h = int(lay["w"]), int(lay["h"])
+    vs = float(lay["vs"])
     wordmark_bottom = draw_text_wordmark(
         base, scale=scale, label=(logo or TEXT_LOGO), accent=box_accent
     )
 
     title = _clean_display(str(slide.get("main_title") or slide.get("hook") or "핵심 체크 포인트"))
-    left_x = CONTENT_LEFT * scale
-    max_w = w - left_x - CONTENT_LEFT * scale
+    left_x = int(lay["left"])
+    max_w = int(lay["max_w"])
 
     raw_items = _as_lines(slide.get("summary_list") or slide.get("body_points") or [])[:4]
     items: list[str] = []
@@ -1199,8 +1252,8 @@ def _render_summary(
         )
         item_fonts.append(f)
 
-    gap_after_title = SUMMARY_HEADER_GAP * scale
-    line_gap = int(SUMMARY_ITEM_BASE * scale * (SUMMARY_LINE_STEP - 1.0))
+    gap_after_title = int(SUMMARY_HEADER_GAP * scale * vs)
+    line_gap = int(SUMMARY_ITEM_BASE * scale * (SUMMARY_LINE_STEP - 1.0) * vs)
     total_height = (
         _text_height(title, title_font)
         + HEADER_PAD_TOP * scale
@@ -1211,7 +1264,12 @@ def _render_summary(
         total_height += _text_height(_plain_from_emphasis(clean), font) + line_gap
 
     y = _content_start_y(
-        canvas_h=h, total_height=total_height, wordmark_bottom=wordmark_bottom, scale=scale
+        canvas_h=h,
+        total_height=total_height,
+        wordmark_bottom=wordmark_bottom,
+        scale=scale,
+        safe_top=int(lay["top"]),
+        safe_bottom=int(lay["bottom"]),
     )
     y = _draw_left_header_box(
         draw, title, y=y, x=left_x, font=title_font, accent=box_accent, scale=scale
@@ -1260,7 +1318,8 @@ def render_slide_pil(
     highlight_color: str = "",
 ) -> Path:
     scale = RETINA
-    w, h = CARD_W * scale, CARD_H * scale
+    fmt = get_active_card_format()
+    w, h = fmt.canvas_px(scale)
     ensure_dir(output_path.parent)
     slide_type = _normalize_slide_type(slide, slide_index - 1, slide_total)
     color = brand_color or DEFAULT_BRAND_COLOR
@@ -1303,7 +1362,13 @@ def render_slide_pil(
         )
 
     img.save(output_path, format="PNG", optimize=True)
-    logger.info("PIL magazine slide %d (%s) -> %s", slide_index, slide_type, output_path.name)
+    logger.info(
+        "PIL magazine slide %d (%s, %s) -> %s",
+        slide_index,
+        slide_type,
+        fmt.resolution_label,
+        output_path.name,
+    )
     return output_path
 
 
@@ -1318,8 +1383,11 @@ def render_all_pil(
     source_credit: str = "",
     type_style: dict[str, str] | None = None,
     highlight_color: str = "",
+    image_format: str = "",
 ) -> list[Path]:
     ensure_dir(output_dir)
+    if image_format:
+        set_active_card_format(image_format)
     set_active_type_style(type_style)
     out: list[Path] = []
     total = len(slides)

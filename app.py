@@ -134,7 +134,15 @@ def _show_card_gallery(
     # Keep in range if pack length changed
     st.session_state[slider_key] = max(1, min(int(st.session_state[slider_key]), n))
 
-    st.markdown(f"**레티나 카드 {n}장** · 2160×3840")
+    res_label = "2160×2700"
+    try:
+        from PIL import Image
+
+        with Image.open(frames[0]) as im0:
+            res_label = f"{im0.size[0]}×{im0.size[1]}"
+    except Exception:  # noqa: BLE001
+        pass
+    st.markdown(f"**레티나 카드 {n}장** · {res_label}")
 
     nav_l, nav_c, nav_r = st.columns([1, 1.2, 1])
     with nav_l:
@@ -388,6 +396,7 @@ if page == "🎬 새 제작":
         make_video = False
         draft_mode = False
         type_style = None
+        image_format = "feed_4x5"
         if mode == ProductionMode.CARD_NEWS:
             st.markdown("**카드뉴스 옵션**")
             from modules.brand_colors import (
@@ -395,10 +404,24 @@ if page == "🎬 새 제작":
                 default_highlight_color,
                 palettes_for_brand,
             )
+            from modules.card_format import (
+                FORMAT_OPTIONS,
+                DEFAULT_FORMAT_ID,
+                format_radio_label,
+            )
             from modules.typography import (
                 FONT_FAMILIES,
                 FONT_WEIGHTS,
                 default_type_style_for_brand,
+            )
+
+            image_format = st.radio(
+                "이미지 출력 포맷",
+                options=list(FORMAT_OPTIONS),
+                format_func=format_radio_label,
+                index=list(FORMAT_OPTIONS).index(DEFAULT_FORMAT_ID),
+                key="card_image_format",
+                help="텍스트 내용은 동일하고, 캔버스 비율·여백만 바뀝니다. 릴스용은 인스타 UI 가림을 피하기 위해 세이프존을 적용합니다.",
             )
 
             # Reset colors when brand profile changes
@@ -665,6 +688,7 @@ if page == "🎬 새 제작":
                         ig_handle=active_ig,
                         type_style=type_style,
                         highlight_color=body_highlight_color or brand_color,
+                        image_format=image_format,
                     )
                 )
                 progress.progress(100, text="완료")

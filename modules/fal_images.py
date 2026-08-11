@@ -146,12 +146,21 @@ async def generate_flux_background(
     def _subscribe() -> dict:
         import fal_client
 
+        iw, ih = 1080, 1350
+        try:
+            from modules.card_format import get_active_card_format
+
+            fmt = get_active_card_format()
+            iw, ih = fmt.logical_w, fmt.logical_h
+        except Exception:  # noqa: BLE001
+            pass
+
         return fal_client.subscribe(
             FAL_MODEL,
             arguments={
                 "prompt": use_prompt,
                 "negative_prompt": FAL_NEGATIVE,
-                "image_size": {"width": 1080, "height": 1440},
+                "image_size": {"width": iw, "height": ih},
                 "num_inference_steps": 4,
                 "seed": use_seed,
             },

@@ -68,6 +68,7 @@ async def run_full_studio_pipeline(
     ig_handle: str = "",
     type_style: dict | None = None,
     highlight_color: str = "",
+    image_format: str = "",
 ) -> StudioRunResult:
     """One-shot: (optional category topic pick) → research → hook → render."""
     from modules.topic_picker import pick_topic_for_category
@@ -163,6 +164,7 @@ async def run_full_studio_pipeline(
         ig_handle=ig_handle,
         type_style=type_style,
         highlight_color=highlight_color,
+        image_format=image_format,
     )
 
     script_data: dict[str, Any] = {}
