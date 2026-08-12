@@ -372,7 +372,12 @@ async def fetch_live_web_facts(
         raise ValueError("topic is required for web fact search")
 
     settings = get_settings()
-    tavily_days = max(1, int(days if days is not None else settings.tavily_days or 7))
+    try:
+        from modules.research import _freshness_window_days
+
+        tavily_days = max(1, int(days if days is not None else _freshness_window_days()))
+    except Exception:  # noqa: BLE001
+        tavily_days = max(1, min(7, int(days if days is not None else settings.tavily_days or 7)))
     skip_ddg = bool(settings.tavily_skip_ddg_fallback) and _tavily_configured()
 
     providers: list[tuple[str, Any]] = []

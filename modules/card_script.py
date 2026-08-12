@@ -399,8 +399,17 @@ def _fact_years(fact: str) -> set[int]:
 
 
 def _is_stale_fact(fact: str) -> bool:
-    """Reject facts anchored in 2024 or earlier without a 2025/2026 signal."""
-    years = _fact_years(fact)
+    """Reject old-year facts and month-old relative Korean dates."""
+    blob = fact or ""
+    if re.search(r"지난\s*달|지난달|한\s*달여|한\s*달\s*전|한달\s*전", blob):
+        return True
+    m = re.search(r"(\d+)\s*(?:개월|달)\s*전", blob)
+    if m and int(m.group(1)) >= 1:
+        return True
+    m = re.search(r"(\d+)\s*주\s*전", blob)
+    if m and int(m.group(1)) >= 2:
+        return True
+    years = _fact_years(blob)
     if not years:
         return False
     if any(y >= CURRENT_YEAR - 1 for y in years):

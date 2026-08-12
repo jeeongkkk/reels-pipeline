@@ -140,77 +140,136 @@ def google_news_search_url(topic: str, *, days: int | None = None) -> str:
     return f"https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
 
 
+NEWS_FRESHNESS_CAP_DAYS = 7  # never surface ~1-month Google News recrawls
+
+
 def _freshness_window_days() -> int:
-    return max(1, int(get_settings().tavily_days or 7))
+    """News window: settings.tavily_days, hard-capped at 7 days."""
+    configured = max(1, int(get_settings().tavily_days or 7))
+    if configured > NEWS_FRESHNESS_CAP_DAYS:
+        logger.warning(
+            "TAVILY_DAYS=%d exceeds news cap %dd – using %dd",
+            configured,
+            NEWS_FRESHNESS_CAP_DAYS,
+            NEWS_FRESHNESS_CAP_DAYS,
+        )
+    return min(configured, NEWS_FRESHNESS_CAP_DAYS)
 
 
-def _parse_published_age_days(article: dict[str, Any]) -> float | None:
-    """Return age in days from published field, title/summary dates, or relative KR phrases."""
+def _age_from_datetime(dt: datetime) -> float:
+    if dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None)
+    return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
+
+
+def _parse_datetime_string(raw: str) -> datetime | None:
     from email.utils import parsedate_to_datetime
 
-    raw = str(article.get("published") or article.get("published_date") or "").strip()
-    if raw:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = parsedate_to_datetime(raw)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except Exception:  # noqa: BLE001
+        pass
+    m_iso = re.search(r"(20\d{2})-(\d{1,2})-(\d{1,2})", raw)
+    if m_iso:
         try:
-            dt = parsedate_to_datetime(raw)
-            if dt.tzinfo is not None:
-                dt = dt.replace(tzinfo=None)
-            return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
-        except Exception:  # noqa: BLE001
+            return datetime(int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3)))
+        except ValueError:
             pass
-        # ISO-ish
-        m_iso = re.search(r"(20\d{2})-(\d{1,2})-(\d{1,2})", raw)
-        if m_iso:
-            try:
-                dt = datetime(int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3)))
-                return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
-            except ValueError:
-                pass
-        m = re.search(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", raw)
-        if m:
-            try:
-                dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-                return max(0.0, (datetime.now() - dt).total_seconds() / 86400.0)
-            except ValueError:
-                pass
+    m = re.search(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", raw)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            pass
+    return None
 
-    blob = f"{article.get('title', '')} {article.get('summary', '')}"
-    # Relative Korean age phrases in body/title
-    m_rel = re.search(r"(\d+)\s*주\s*전", blob)
-    if m_rel:
-        return float(int(m_rel.group(1)) * 7)
-    m_rel = re.search(r"(\d+)\s*개월\s*전", blob)
-    if m_rel:
-        return float(int(m_rel.group(1)) * 30)
-    m_rel = re.search(r"(\d+)\s*일\s*전", blob)
-    if m_rel:
-        return float(int(m_rel.group(1)))
 
-    # Absolute date in headline/snippet (prefer most recent-looking explicit date)
+def _text_age_days(blob: str) -> float | None:
+    """Age implied by Korean relative phrases / calendar dates in title·summary.
+
+    Google News RSS pubdate is often a recrawl stamp – text wins when older.
+    """
+    text = blob or ""
+    ages: list[float] = []
+
+    if re.search(r"지난\s*달|지난달|한\s*달여|한\s*달\s*전|한달\s*전", text):
+        ages.append(30.0)
+    m = re.search(r"(\d+)\s*(?:개월|달)\s*전", text)
+    if m:
+        ages.append(float(int(m.group(1)) * 30))
+    m = re.search(r"(\d+)\s*주\s*전", text)
+    if m:
+        ages.append(float(int(m.group(1)) * 7))
+    m = re.search(r"(\d+)\s*일\s*전", text)
+    if m:
+        ages.append(float(int(m.group(1))))
+
     dates: list[datetime] = []
-    for m in re.finditer(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", blob):
+    for m in re.finditer(r"(20\d{2})[./년\s-]+(\d{1,2})[./월\s-]+(\d{1,2})", text):
         try:
             dates.append(datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))))
         except ValueError:
             continue
+    # Month-day without year (e.g. 7월 12일) → assume current year, else previous
+    now = datetime.now()
+    for m in re.finditer(r"(?<!\d)(\d{1,2})\s*월\s*(\d{1,2})\s*일", text):
+        try:
+            dt = datetime(now.year, int(m.group(1)), int(m.group(2)))
+        except ValueError:
+            continue
+        if dt > now:
+            try:
+                dt = datetime(now.year - 1, int(m.group(1)), int(m.group(2)))
+            except ValueError:
+                continue
+        dates.append(dt)
     if dates:
-        newest = max(dates)
-        return max(0.0, (datetime.now() - newest).total_seconds() / 86400.0)
-    return None
+        # Oldest explicit date = how stale the story actually is
+        ages.append(_age_from_datetime(min(dates)))
+
+    if not ages:
+        return None
+    return max(ages)
+
+
+def _parse_published_age_days(article: dict[str, Any]) -> float | None:
+    """Conservative age: max(RSS pubdate, title/summary date signals)."""
+    ages: list[float] = []
+    raw = str(article.get("published") or article.get("published_date") or "").strip()
+    dt = _parse_datetime_string(raw)
+    if dt is not None:
+        ages.append(_age_from_datetime(dt))
+    parsed = article.get("published_parsed")
+    if parsed:
+        try:
+            ages.append(_age_from_datetime(datetime(*parsed[:6])))
+        except Exception:  # noqa: BLE001
+            pass
+    blob = f"{article.get('title', '')} {article.get('summary', '')}"
+    text_age = _text_age_days(blob)
+    if text_age is not None:
+        ages.append(text_age)
+    if not ages:
+        return None
+    return max(ages)
 
 
 def _is_within_freshness_window(article: dict[str, Any], *, days: int | None = None) -> bool:
-    """True when known age <= window; undated kept only without older-year signals."""
+    """True only when known age <= window. Undated kept only without old-year signal."""
     window = max(1, int(days if days is not None else _freshness_window_days()))
     age = _parse_published_age_days(article)
     if age is not None:
-        return age <= window + 0.01  # tiny float slack
+        return age <= window + 0.01
     years = _article_years(article)
     if years:
         newest = max(years)
-        if newest <= CURRENT_YEAR - 2:
-            return False
-        # Prior calendar year + short window → treat as stale
-        if newest < CURRENT_YEAR and window <= 14:
+        if newest < CURRENT_YEAR:
             return False
     return True
 
@@ -220,12 +279,12 @@ def _filter_fresh_articles(
 ) -> list[dict[str, Any]]:
     """Hard-drop items older than the freshness window.
 
-    When enough dated articles remain, drop undated items (evergreen/ads leak).
+    Prefer dated hits; drop undated when a few dated articles remain.
     """
     window = max(1, int(days if days is not None else _freshness_window_days()))
     kept = [a for a in articles if _is_within_freshness_window(a, days=window)]
     dated = [a for a in kept if _parse_published_age_days(a) is not None]
-    if len(dated) >= 6:
+    if len(dated) >= 4:
         return dated
     return kept
 
@@ -331,6 +390,14 @@ def _parse_feed_entries(feed: feedparser.FeedParserDict, source_url: str) -> lis
         )
         link = getattr(entry, "link", "") or ""
         published = getattr(entry, "published", "") or getattr(entry, "updated", "") or ""
+        published_parsed = getattr(entry, "published_parsed", None) or getattr(
+            entry, "updated_parsed", None
+        )
+        if published_parsed and not published:
+            try:
+                published = datetime(*published_parsed[:6]).strftime("%a, %d %b %Y %H:%M:%S")
+            except Exception:  # noqa: BLE001
+                published = ""
         if not title:
             continue
         articles.append(
@@ -339,6 +406,7 @@ def _parse_feed_entries(feed: feedparser.FeedParserDict, source_url: str) -> lis
                 "summary": summary[:400],
                 "link": link,
                 "published": published,
+                "published_parsed": published_parsed,
                 "feed": source_url,
             }
         )

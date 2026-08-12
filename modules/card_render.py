@@ -37,22 +37,28 @@ def _render_all_sync(
     image_format: str = "",
 ) -> list[Path]:
     """Sync entry used by card_capture_worker (PIL, not Playwright)."""
+    import inspect
+
     del highlight_mode  # legacy compat
+    from modules.card_format import set_active_card_format
     from modules.card_pil_render import render_all_pil
 
+    if image_format:
+        set_active_card_format(image_format)
+
     ensure_dir(output_dir)
-    return render_all_pil(
-        slides,
-        backgrounds,
-        output_dir,
-        brand_color=brand_color or "#fc4d01",
-        logo=logo,
-        ig_handle=ig_handle,
-        source_credit=source_credit,
-        type_style=type_style,
-        highlight_color=highlight_color,
-        image_format=image_format,
-    )
+    kwargs: dict[str, Any] = {
+        "brand_color": brand_color or "#fc4d01",
+        "logo": logo,
+        "ig_handle": ig_handle,
+        "source_credit": source_credit,
+        "type_style": type_style,
+        "highlight_color": highlight_color,
+    }
+    # Older in-memory / Cloud workers may not accept image_format yet
+    if "image_format" in inspect.signature(render_all_pil).parameters:
+        kwargs["image_format"] = image_format
+    return render_all_pil(slides, backgrounds, output_dir, **kwargs)
 
 
 async def render_slides_to_pngs(

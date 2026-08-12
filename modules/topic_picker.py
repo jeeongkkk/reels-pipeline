@@ -412,8 +412,7 @@ def _score_article(article: dict[str, Any], category: TopicCategory) -> float:
 
 
 def _category_feed_urls(category: TopicCategory) -> list[str]:
-    settings = get_settings()
-    days = max(1, int(settings.tavily_days or 7))
+    days = _freshness_window_days()
     feeds = [google_news_search_url(q, days=days) for q in category.search_queries]
     # Topical KR news + category keyword (also within freshness window)
     feeds.append(
@@ -435,7 +434,7 @@ async def _tavily_boost(category: TopicCategory, limit: int = 6) -> list[dict[st
     if not key or key.startswith("your_"):
         return []
 
-    days = max(1, int(settings.tavily_days or 7))
+    days = _freshness_window_days()
     try:
         import httpx
 
