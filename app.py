@@ -21,9 +21,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 import streamlit as st
 
-from modules.modes import MODE_LABELS, ProductionMode
+from modules.modes import ProductionMode
 from modules.project import list_projects
-from modules.reference import FOLLOW_POINT_OPTIONS, ReferenceInput
+from modules.reference import ReferenceInput
 from modules.utils import ROOT_DIR, get_settings, load_brand_config
 
 st.set_page_config(
@@ -200,7 +200,7 @@ def _show_card_gallery(
         st.download_button(
             label="초고화질 카드뉴스 ZIP 다운로드",
             data=slides_zip.read_bytes(),
-            file_name="card_slides_2160x3840.zip",
+            file_name="card_slides.zip",
             mime="application/zip",
             type="primary",
             use_container_width=True,
@@ -232,7 +232,15 @@ selected_profile_id = st.sidebar.selectbox(
 if selected_profile_id != st.session_state.get("brand_profile_id"):
     st.session_state["brand_profile_id"] = selected_profile_id
     # Reset topic preview when brand switches
-    for k in ("topic_preview", "topic_choice", "topic_preview_cat", "topic_choice_radio"):
+    for k in (
+        "topic_preview",
+        "topic_choice",
+        "topic_preview_cat",
+        "topic_choice_radio",
+        "reel_ideas",
+        "reel_idea_pick",
+        "reel_idea_radio",
+    ):
         st.session_state.pop(k, None)
 set_active_brand(selected_profile_id)
 brand = load_brand_config()  # reload after profile switch
@@ -261,19 +269,38 @@ st.sidebar.markdown(f"**Publish:** `{settings.publish_mode}`")
 st.sidebar.caption(f"활성 브랜드: **{active_brand_name}**")
 _render_api_status_sidebar()
 
-# ── Page: Create ─────────────────────────────────────────────
+# ── Page: Create (single-page, purpose toggles the form below) ─
 if page == "🎬 새 제작":
     st.title("새 카드뉴스 제작")
     is_bebe = selected_profile_id == "bebeskin"
-    if is_bebe:
-        st.caption(
-            f"{active_brand_name} · 아기 피부 카테고리 자동 스크랩 → 레티나 PNG + ZIP "
-            "(진단·처방 단정 없이 관찰·보습·기록 톤)"
-        )
-    else:
-        st.caption("카테고리 선택 → 그 안에서 주제 자동 선정 → 레티나 PNG + ZIP")
+    st.caption(
+        f"{active_brand_name} · 같은 화면에서 피드/릴스만 전환 · 브랜드 기본 색상 고정 · PNG ZIP"
+    )
 
+    PURPOSE_FEED = "인스타 피드용 (뉴스/정책)"
+    PURPOSE_REELS = "인스타 릴스용 (인사이트/꿀팁)"
+    purpose = st.radio(
+        "제작 목적",
+        [PURPOSE_FEED, PURPOSE_REELS],
+        horizontal=True,
+        key="card_purpose",
+        help="클릭하면 아래 주제 영역만 바뀝니다. 페이지를 나가지 않습니다.",
+    )
+    is_feed = purpose == PURPOSE_FEED
+    image_format = "feed_4x5" if is_feed else "reels_9x16"
+    st.caption(
+        "이미지 비율 자동 · 4:5 (2160×2700)"
+        if is_feed
+        else "이미지 비율 자동 · 9:16 (2160×3840) · 릴스 세이프존 적용"
+    )
+
+    from modules.brand_colors import default_box_color, default_highlight_color
     from modules.topic_picker import list_categories
+    from modules.typography import default_type_style_for_brand
+
+    brand_color = default_box_color(brand)
+    body_highlight_color = default_highlight_color(brand)
+    type_style = default_type_style_for_brand(brand).to_dict()
 
     categories = list_categories(selected_profile_id)
     cat_labels = [c.label for c in categories]
@@ -282,46 +309,39 @@ if page == "🎬 새 제작":
     col_form, col_preview = st.columns([1.1, 1])
 
     with col_form:
-        category_label = st.selectbox(
-            "큰 카테고리 *",
-            cat_labels,
-            index=0,
-            help="선택한 카테고리 안에서 최신 뉴스를 모아 주제를 자동 선정합니다.",
-        )
-        category = cat_by_label[category_label]
-        st.caption(category.description)
-
-        topic_mode = st.radio(
-            "주제 방식",
-            ["카테고리 안 자동 선정", "직접 입력"],
-            horizontal=True,
-            index=0,
-        )
-
-        manual_topic = ""
+        category = cat_by_label[cat_labels[0]] if cat_labels else None
         selected_auto_topic = ""
-        if topic_mode == "직접 입력":
-            manual_topic = st.text_input(
-                "주제 *",
-                placeholder="예: 2026년 탄소중립 지원사업 2500억",
+        run_topic = ""
+        run_hook = ""
+        audience = "영유아 보호자" if is_bebe else "B2B 마케터"
+        use_auto = False
+
+        if is_feed:
+            category_label = st.selectbox(
+                "큰 카테고리 *",
+                cat_labels,
+                index=0,
+                help="선택한 카테고리 안에서 최신 뉴스를 모아 주제를 자동 선정합니다.",
+                key="feed_category",
             )
-        else:
+            category = cat_by_label[category_label]
+            st.caption(category.description)
             st.info(
                 f"**{category.label}** 뉴스를 스캔해 후보를 보여 줍니다. "
                 "목록에서 고른 뒤 제작하세요. (안 고르면 1위 자동)"
             )
-
-            # Reset pick when category changes
             if st.session_state.get("topic_preview_cat") != category.id:
                 st.session_state.pop("topic_preview", None)
                 st.session_state.pop("topic_choice", None)
                 st.session_state["topic_preview_cat"] = category.id
 
-            preview_btn = st.button("주제 후보 불러오기", use_container_width=True)
+            preview_btn = st.button(
+                "뉴스/공고 스캔 및 후보 불러오기",
+                use_container_width=True,
+                key="feed_scan_btn",
+            )
             if preview_btn:
                 with st.spinner("카테고리 뉴스 스캔 중..."):
-                    import sys
-
                     if sys.platform == "win32":
                         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
                     from modules.topic_picker import pick_topic_for_category
@@ -339,7 +359,6 @@ if page == "🎬 새 제작":
                     prev_choice = st.session_state.get("topic_choice")
                     if prev_choice in options:
                         default_idx = options.index(prev_choice)
-
                     selected_auto_topic = st.radio(
                         "후보에서 주제 선택",
                         options,
@@ -347,8 +366,6 @@ if page == "🎬 새 제작":
                         key="topic_choice_radio",
                     )
                     st.session_state["topic_choice"] = selected_auto_topic
-
-                    # Show source under each option via captions for the selected one
                     chosen = next(
                         (c for c in candidates if c.get("topic") == selected_auto_topic),
                         None,
@@ -367,339 +384,165 @@ if page == "🎬 새 제작":
                                 unsafe_allow_html=True,
                             )
                 else:
-                    st.warning("후보가 없습니다. 다시 불러오거나 직접 입력으로 전환하세요.")
+                    st.warning("후보가 없습니다. 다시 불러와 주세요.")
             else:
-                st.caption("아직 후보가 없습니다. 「주제 후보 불러오기」를 눌러 주세요.")
+                st.caption("아직 후보가 없습니다. 「뉴스/공고 스캔 및 후보 불러오기」를 눌러 주세요.")
 
-        audience_opts = (
-            ["영유아 보호자", "육아 초보 부모", "소아과 방문 전 보호자", "일반"]
-            if is_bebe
-            else ["B2B 마케터", "스타트업 창업자", "마케팅 대행사", "일반"]
-        )
-        audience = st.selectbox(
-            "타겟",
-            audience_opts,
-        )
-        tone = st.selectbox("톤", ["brand default", "casual", "semi-formal", "formal"])
-        mode = st.radio(
-            "제작 모드",
-            list(ProductionMode),
-            format_func=lambda m: MODE_LABELS.get(m, m.value),
-            horizontal=True,
-            index=0,
-        )
-
-        use_tts = False
-        brand_color = active_brand_color
-        body_highlight_color = active_brand_color
-        highlight_mode = "color"
-        make_video = False
-        draft_mode = False
-        type_style = None
-        image_format = "feed_4x5"
-        if mode == ProductionMode.CARD_NEWS:
-            st.markdown("**카드뉴스 옵션**")
-            from modules.brand_colors import (
-                default_box_color,
-                default_highlight_color,
-                palettes_for_brand,
-            )
-            from modules.card_format import (
-                FORMAT_OPTIONS,
-                DEFAULT_FORMAT_ID,
-                format_radio_label,
-            )
-            from modules.typography import (
-                FONT_FAMILIES,
-                FONT_WEIGHTS,
-                default_type_style_for_brand,
-            )
-
-            image_format = st.radio(
-                "이미지 출력 포맷",
-                options=list(FORMAT_OPTIONS),
-                format_func=format_radio_label,
-                index=list(FORMAT_OPTIONS).index(DEFAULT_FORMAT_ID),
-                key="card_image_format",
-                help="텍스트 내용은 동일하고, 캔버스 비율·여백만 바뀝니다. 릴스용은 인스타 UI 가림을 피하기 위해 세이프존을 적용합니다.",
-            )
-
-            # Reset colors when brand profile changes
-            palette_brand_key = f"palette_for_{selected_profile_id}"
-            if st.session_state.get("palette_brand_key") != palette_brand_key:
-                st.session_state["palette_brand_key"] = palette_brand_key
-                st.session_state["card_box_color"] = default_box_color(brand)
-                st.session_state["card_highlight_color"] = default_highlight_color(brand)
-                st.session_state["card_palette_id"] = ""
-
-            if "card_box_color" not in st.session_state:
-                st.session_state["card_box_color"] = default_box_color(brand)
-            if "card_highlight_color" not in st.session_state:
-                st.session_state["card_highlight_color"] = default_highlight_color(brand)
-
-            st.markdown("**추천 팔레트** (탭하면 표지 박스 / 본문 강조에 바로 적용)")
-            swatches = palettes_for_brand(brand)
-            chip_cols = st.columns(min(5, max(1, len(swatches))))
-            for i, sw in enumerate(swatches):
-                with chip_cols[i % len(chip_cols)]:
-                    active = st.session_state.get("card_palette_id") == sw.id
-                    label = f"{'● ' if active else ''}{sw.label}"
-                    if st.button(
-                        label,
-                        key=f"palette_chip_{selected_profile_id}_{sw.id}",
-                        use_container_width=True,
-                        help=f"박스 {sw.box} · 강조 {sw.highlight}",
-                    ):
-                        st.session_state["card_box_color"] = sw.box
-                        st.session_state["card_highlight_color"] = sw.highlight
-                        st.session_state["card_palette_id"] = sw.id
-                        st.rerun()
-                    st.markdown(
-                        f'<div style="display:flex;gap:4px;margin:-0.35rem 0 0.6rem 0;">'
-                        f'<div style="flex:1;height:8px;border-radius:4px;background:{sw.box};"></div>'
-                        f'<div style="flex:1;height:8px;border-radius:4px;background:{sw.highlight};"></div>'
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-
-            c_box, c_hi = st.columns(2)
-            with c_box:
-                brand_color = st.color_picker(
-                    "표지·소제목 박스 색",
-                    key="card_box_color",
+            with st.expander("📋 스크랩 직접 입력 (선택)", expanded=False):
+                st.text_area(
+                    "내용 붙여넣기 (한 줄에 하나의 팩트·기사 요약·URL)",
+                    placeholder=(
+                        "예:\n목욕 후 3분 이내 보습이 피부장벽에 도움\nhttps://…"
+                        if is_bebe
+                        else "예:\n중소기업 기술보호 바우처 최대 5000만원 지원\nhttps://www.mss.go.kr/..."
+                    ),
+                    height=120,
+                    key="custom_scrap_input",
                 )
-            with c_hi:
-                body_highlight_color = st.color_picker(
-                    "본문 강조(*별표*) 색",
-                    key="card_highlight_color",
-                )
-            matched = next(
-                (
-                    s
-                    for s in swatches
-                    if s.box.upper() == str(brand_color).upper()
-                    and s.highlight.upper() == str(body_highlight_color).upper()
-                ),
-                None,
-            )
-            st.session_state["card_palette_id"] = matched.id if matched else ""
+                st.caption("여기에 넣은 내용이 자동 웹 스크랩보다 **우선** 반영됩니다.")
 
-            highlight_mode = "box"
-            typo_default = default_type_style_for_brand(brand)
-            fam_keys = list(FONT_FAMILIES.keys())
-            weight_keys = list(FONT_WEIGHTS.keys())
-            c_font, c_title, c_body = st.columns(3)
-            with c_font:
-                font_family = st.selectbox(
-                    "글씨체",
-                    fam_keys,
-                    index=fam_keys.index(typo_default.family)
-                    if typo_default.family in fam_keys
-                    else 0,
-                    format_func=lambda k: FONT_FAMILIES[k],
-                    key="card_font_family",
-                )
-            with c_title:
-                title_weight = st.selectbox(
-                    "제목 굵기 (표지·소제목·아웃트로)",
-                    weight_keys,
-                    index=weight_keys.index(typo_default.title_weight)
-                    if typo_default.title_weight in weight_keys
-                    else weight_keys.index("extrabold"),
-                    format_func=lambda k: FONT_WEIGHTS[k],
-                    key="card_title_weight",
-                )
-            with c_body:
-                body_weight = st.selectbox(
-                    "본문 굵기",
-                    weight_keys,
-                    index=weight_keys.index(typo_default.body_weight)
-                    if typo_default.body_weight in weight_keys
-                    else weight_keys.index("regular"),
-                    format_func=lambda k: FONT_WEIGHTS[k],
-                    key="card_body_weight",
-                )
-            with st.expander("타이포 상세 (워드마크·핸들·서브)", expanded=False):
-                w1, w2, w3 = st.columns(3)
-                with w1:
-                    wordmark_weight = st.selectbox(
-                        "워드마크 굵기",
-                        weight_keys,
-                        index=weight_keys.index(typo_default.wordmark_weight)
-                        if typo_default.wordmark_weight in weight_keys
-                        else weight_keys.index("bold"),
-                        format_func=lambda k: FONT_WEIGHTS[k],
-                        key="card_wordmark_weight",
-                    )
-                with w2:
-                    handle_weight = st.selectbox(
-                        "IG 핸들 굵기",
-                        weight_keys,
-                        index=weight_keys.index(typo_default.handle_weight)
-                        if typo_default.handle_weight in weight_keys
-                        else weight_keys.index("medium"),
-                        format_func=lambda k: FONT_WEIGHTS[k],
-                        key="card_handle_weight",
-                    )
-                with w3:
-                    sub_weight = st.selectbox(
-                        "서브/출처 굵기",
-                        weight_keys,
-                        index=weight_keys.index(typo_default.sub_weight)
-                        if typo_default.sub_weight in weight_keys
-                        else weight_keys.index("regular"),
-                        format_func=lambda k: FONT_WEIGHTS[k],
-                        key="card_sub_weight",
-                    )
-            type_style = {
-                "family": font_family,
-                "title_weight": title_weight,
-                "body_weight": body_weight,
-                "wordmark_weight": wordmark_weight,
-                "handle_weight": handle_weight,
-                "sub_weight": sub_weight,
-            }
-            st.caption(
-                f"표지 IG: {active_ig or '@…'} · 워드마크: {active_brand_name} · "
-                f"박스 {brand_color} · 본문강조 {body_highlight_color} · "
-                f"{FONT_FAMILIES.get(font_family, font_family)} / "
-                f"제목 {FONT_WEIGHTS.get(title_weight, title_weight)} · "
-                f"본문 {FONT_WEIGHTS.get(body_weight, body_weight)}"
-            )
+            use_auto = True
+            run_topic = (
+                selected_auto_topic or st.session_state.get("topic_choice") or ""
+            ).strip()
         else:
-            use_tts = True
-            type_style = None
-            body_highlight_color = ""
-        with st.expander("📋 스크랩 직접 입력 (선택)", expanded=False):
-            custom_scrap = st.text_area(
-                "내용 붙여넣기 (한 줄에 하나의 팩트·기사 요약·URL)",
-                placeholder=(
-                    "예:\n"
-                    "목욕 후 3분 이내 보습이 피부장벽에 도움\n"
-                    "동일 구도 사진으로 경과 비교\n"
-                    "https://…"
-                    if is_bebe
-                    else (
-                        "예:\n"
-                        "중소기업 기술보호 바우처 최대 5000만원 지원\n"
-                        "신청기간 2026.8.1~8.31\n"
-                        "https://www.mss.go.kr/site/smba/ex/..."
-                    )
-                ),
-                height=120,
-                key="custom_scrap_input",
-            )
-            st.caption(
-                "여기에 넣은 내용이 자동 웹 스크랩보다 **우선** 반영됩니다. "
-                "기사 본문, 보도자료 요약, URL 모두 가능."
-            )
+            from modules.reel_ideas import REEL_TARGETS
 
-        with st.expander("레퍼런스 (선택)", expanded=False):
-            ref_urls = st.text_area(
-                "URL (한 줄에 하나)",
-                placeholder="https://www.instagram.com/reel/...",
-                height=70,
+            reel_keyword = st.text_input(
+                "핵심 키워드 *",
+                placeholder="예: 정부지원 타이밍 / IR 한 장 숫자 / 조달 공고 실수",
+                key="reel_keyword",
             )
-            ref_notes = st.text_area(
-                "스타일 메모",
-                placeholder=ref_defaults.get(
-                    "style_notes_placeholder",
-                    "문장 단위 자막, 하단, 첫 1초 강한 훅",
-                ),
-                height=80,
+            reel_target = st.selectbox(
+                "타겟",
+                list(REEL_TARGETS),
+                index=0,
+                key="reel_target",
+                help="B2B 실무 · B2G 공공/조달 · IR 투자 설득",
             )
-            ref_follow = st.multiselect(
-                "따라갈 포인트",
-                options=list(FOLLOW_POINT_OPTIONS),
-                default=ref_defaults.get("follow_points_default", ["hook", "caption", "tone"]),
-            )
+            audience = {
+                "B2B": "B2B 마케터",
+                "B2G": "공공기관·조달 담당",
+                "IR": "투자자·IR 담당",
+            }.get(str(reel_target), "B2B 마케터")
 
-        make_pkg = st.checkbox("업로드 패키지도 만들기 (PNG + ZIP + caption.txt)", value=True)
-        st.caption("카테고리 스캔 + 카드뉴스 6~8장 · 보통 1~3분")
-        can_run = bool(manual_topic.strip()) if topic_mode == "직접 입력" else True
+            idea_btn = st.button(
+                "릴스 아이디어 5개 뽑기",
+                use_container_width=True,
+                key="reel_ideas_btn",
+            )
+            if idea_btn:
+                if not (reel_keyword or "").strip():
+                    st.error("핵심 키워드를 입력하세요.")
+                else:
+                    with st.spinner("후킹 대본 후보 생성 중..."):
+                        if sys.platform == "win32":
+                            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+                        from modules.reel_ideas import generate_reel_ideas
+
+                        ideas = asyncio.run(
+                            generate_reel_ideas(reel_keyword.strip(), str(reel_target), count=5)
+                        )
+                        st.session_state["reel_ideas"] = [i.to_dict() for i in ideas]
+                        st.session_state["reel_idea_pick"] = ideas[0].title if ideas else ""
+
+            ideas_data = st.session_state.get("reel_ideas") or []
+            idea_titles = [str(i.get("title") or "").strip() for i in ideas_data if i.get("title")]
+            if idea_titles:
+                default_idx = 0
+                prev = st.session_state.get("reel_idea_pick")
+                if prev in idea_titles:
+                    default_idx = idea_titles.index(prev)
+                picked_title = st.radio(
+                    "대본 후보 선택",
+                    idea_titles,
+                    index=default_idx,
+                    key="reel_idea_radio",
+                )
+                st.session_state["reel_idea_pick"] = picked_title
+                picked = next((i for i in ideas_data if i.get("title") == picked_title), None)
+                if picked:
+                    st.caption(f"훅: {picked.get('hook') or '-'} · 각도: {picked.get('angle') or '-'}")
+                run_topic = picked_title
+                run_hook = str((picked or {}).get("hook") or picked_title)
+            else:
+                st.caption("키워드와 타겟을 넣고 「릴스 아이디어 5개 뽑기」를 눌러 주세요.")
+                run_topic = (reel_keyword or "").strip()
+                run_hook = run_topic
+
         run_btn = st.button(
-            "카드뉴스 제작 실행",
+            "제작하기",
             type="primary",
             use_container_width=True,
-            disabled=not can_run,
+            key="card_produce_btn",
         )
 
         if run_btn:
-            reference = ReferenceInput(
-                urls=[u.strip() for u in ref_urls.splitlines() if u.strip()],
-                style_notes=ref_notes.strip(),
-                follow_points=ref_follow or ["hook", "caption", "tone"],
-            )
-            progress = st.progress(0, text="준비 중...")
-            status = st.empty()
-            log_box = st.empty()
-            logs: list[str] = []
-
-            def on_progress(pct: int, message: str) -> None:
-                logs.append(f"[{pct:3d}%] {message}")
-                progress.progress(min(max(pct, 0), 100), text=message)
-                status.info(message)
-                log_box.code("\n".join(logs[-12:]), language=None)
-
-            try:
-                from modules.studio import run_full_studio_pipeline
-                import sys
-
-                if sys.platform == "win32":
-                    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-                use_auto = topic_mode == "카테고리 안 자동 선정"
-                run_topic = ""
-                if use_auto:
-                    run_topic = (
-                        selected_auto_topic
-                        or st.session_state.get("topic_choice")
-                        or ""
-                    ).strip()
-                else:
-                    run_topic = manual_topic.strip()
-
-                # Parse user custom scraps
-                user_facts: list[str] = []
-                raw_scrap = (st.session_state.get("custom_scrap_input") or "").strip()
-                if raw_scrap:
-                    user_facts = [
-                        ln.strip()
-                        for ln in raw_scrap.splitlines()
-                        if ln.strip()
-                    ]
-
-                result = asyncio.run(
-                    run_full_studio_pipeline(
-                        topic=run_topic,
-                        mode=mode,
-                        reference=reference,
-                        target_audience=audience,
-                        tone_override=tone,
-                        make_publish_package=make_pkg,
-                        on_progress=on_progress,
-                        use_tts=use_tts,
-                        brand_color=brand_color,
-                        highlight_mode=highlight_mode,
-                        draft_mode=draft_mode,
-                        make_video=make_video,
-                        category_id=category.id if use_auto else None,
-                        custom_facts=user_facts or None,
-                        ig_handle=active_ig,
-                        type_style=type_style,
-                        highlight_color=body_highlight_color or brand_color,
-                        image_format=image_format,
-                    )
+            missing = (not is_feed and not run_topic) or (is_feed and not category)
+            if missing:
+                st.error(
+                    "카테고리를 선택하세요."
+                    if is_feed
+                    else "키워드를 넣고 아이디어를 뽑은 뒤 후보를 선택하세요."
                 )
-                progress.progress(100, text="완료")
-                status.success("제작 완료 - 아래에서 ZIP을 다운로드하세요")
-                st.session_state["last_result"] = result.to_dict()
-                st.session_state["selected_project"] = Path(result.project_dir).name
-            except Exception as exc:  # noqa: BLE001
-                progress.progress(100, text="실패")
-                err = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
-                status.error(f"제작 실패: {err}")
-                log_box.code("\n".join(logs[-20:] + [f"ERROR: {err}"]), language=None)
+            else:
+                progress = st.progress(0, text="준비 중...")
+                status = st.empty()
+                log_box = st.empty()
+                logs: list[str] = []
+
+                def on_progress(pct: int, message: str) -> None:
+                    logs.append(f"[{pct:3d}%] {message}")
+                    progress.progress(min(max(pct, 0), 100), text=message)
+                    status.info(message)
+                    log_box.code("\n".join(logs[-12:]), language=None)
+
+                try:
+                    from modules.studio import run_full_studio_pipeline
+
+                    if sys.platform == "win32":
+                        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+                    user_facts: list[str] = []
+                    if is_feed:
+                        raw_scrap = (st.session_state.get("custom_scrap_input") or "").strip()
+                        if raw_scrap:
+                            user_facts = [
+                                ln.strip() for ln in raw_scrap.splitlines() if ln.strip()
+                            ]
+
+                    result = asyncio.run(
+                        run_full_studio_pipeline(
+                            topic=run_topic,
+                            mode=ProductionMode.CARD_NEWS,
+                            reference=ReferenceInput(),
+                            target_audience=audience,
+                            tone_override="brand default",
+                            selected_hook=run_hook or None,
+                            make_publish_package=True,
+                            on_progress=on_progress,
+                            use_tts=False,
+                            brand_color=brand_color,
+                            highlight_mode="box",
+                            draft_mode=False,
+                            make_video=False,
+                            category_id=category.id if is_feed and use_auto and category else None,
+                            custom_facts=user_facts or None,
+                            ig_handle=active_ig,
+                            type_style=type_style,
+                            highlight_color=body_highlight_color or brand_color,
+                            image_format=image_format,
+                        )
+                    )
+                    progress.progress(100, text="완료")
+                    status.success("제작 완료 - 아래에서 ZIP을 다운로드하세요")
+                    st.session_state["last_result"] = result.to_dict()
+                    st.session_state["selected_project"] = Path(result.project_dir).name
+                except Exception as exc:  # noqa: BLE001
+                    progress.progress(100, text="실패")
+                    err = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+                    status.error(f"제작 실패: {err}")
+                    log_box.code("\n".join(logs[-20:] + [f"ERROR: {err}"]), language=None)
 
     with col_preview:
         st.subheader("결과 미리보기")
