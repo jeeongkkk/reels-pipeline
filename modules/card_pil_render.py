@@ -1384,6 +1384,7 @@ def render_all_pil(
     type_style: dict[str, str] | None = None,
     highlight_color: str = "",
     image_format: str = "",
+    **_unused: Any,
 ) -> list[Path]:
     ensure_dir(output_dir)
     if image_format:
